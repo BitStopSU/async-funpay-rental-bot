@@ -136,14 +136,18 @@ async def _send_text(
 
 
 def _account_keyboard(accounts, callback_prefix: str) -> dict[str, Any]:
-    buttons = [
-        {
-            "text": f"#{account['account_id']} · "
-            f"{account['mmr'] if account['mmr'] is not None else '—'} MMR",
-            "callback_data": f"admin:{callback_prefix}:{account['account_id']}",
-        }
-        for account in accounts
-    ]
+    buttons = []
+    for account in accounts:
+        label = f"#{account['account_id']}"
+        if "dota_account_id" in account.keys() and account["dota_account_id"]:
+            label += f" · Dota {account['dota_account_id']}"
+        label += f" · {account['mmr'] if account['mmr'] is not None else '—'} MMR"
+        buttons.append(
+            {
+                "text": label,
+                "callback_data": f"admin:{callback_prefix}:{account['account_id']}",
+            }
+        )
     return {
         "inline_keyboard": [
             buttons[index:index + 2] for index in range(0, len(buttons), 2)
@@ -289,7 +293,9 @@ async def _show_section(
     elif section == "lots":
         text = _lots_text(db)
     elif section == "add_account":
-        text = tr("admin_menu_add_account_text")
+        pending["action"] = "new_account"
+        await _send_text(client, tr("admin_menu_add_account_text"), _back_keyboard())
+        return
     elif section == "listing_text":
         text = _listing_text(db)
     elif section == "settings":
@@ -426,6 +432,40 @@ async def _handle_update(
                 tr("admin_menu_link_choose_account"),
                 _account_keyboard(accounts, "link_account"),
             )
+        elif pending.get("action") == "new_account":
+            values = text.split()
+            if len(values) < 1 or len(values) > 3:
+                await _send_text(client, tr("admin_menu_add_account_invalid"))
+                return
+            dota_account_id = values[0]
+            mmr_text = values[1] if len(values) > 1 else "-"
+            behavior_text = values[2] if len(values) > 2 else "-"
+            if (
+                not dota_account_id.isdecimal()
+                or (mmr_text != "-" and not mmr_text.isdecimal())
+                or (behavior_text != "-" and not behavior_text.isdecimal())
+            ):
+                await _send_text(client, tr("admin_menu_add_account_invalid"))
+                return
+            try:
+                account_id = db.add_account(
+                    dota_account_id=dota_account_id,
+                    mmr=int(mmr_text) if mmr_text != "-" else None,
+                    behavior_score=(
+                        int(behavior_text) if behavior_text != "-" else None
+                    ),
+                )
+                pending.clear()
+                await _send_text(
+                    client,
+                    tr("admin_menu_add_account_saved", account_id=account_id),
+                    _back_keyboard(),
+                )
+            except (ValueError, sqlite3.Error) as exc:
+                logger.warning(
+                    tr("admin_menu_operation_failed"), type(exc).__name__
+                )
+                await _send_text(client, tr("admin_menu_add_account_invalid"))
         elif pending.get("action") == "behavior_value":
             if not text.isdecimal() or int(text) > 12000:
                 await _send_text(client, tr("admin_menu_behavior_invalid"))

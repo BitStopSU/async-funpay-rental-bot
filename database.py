@@ -42,9 +42,9 @@ class Database:
         );
         CREATE TABLE IF NOT EXISTS accounts (
             account_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            login TEXT UNIQUE NOT NULL,
-            password_enc BLOB NOT NULL,
-            shared_secret_enc BLOB NOT NULL,
+            login TEXT UNIQUE,
+            password_enc BLOB,
+            shared_secret_enc BLOB,
             email_login TEXT,
             email_password_enc BLOB,
             steamid64 TEXT,
@@ -122,7 +122,6 @@ class Database:
             UNIQUE (source_chat_id, source_message_id)
         );
         CREATE INDEX IF NOT EXISTS idx_rentals_expiry ON rentals(status, ends_at);
-        CREATE INDEX IF NOT EXISTS idx_accounts_free ON accounts(status, mmr DESC);
         CREATE INDEX IF NOT EXISTS idx_notifications_pending
             ON notifications(sent, severity);
         CREATE INDEX IF NOT EXISTS idx_password_tasks_pending
@@ -143,7 +142,60 @@ class Database:
             self.conn.execute(
                 "ALTER TABLE lots ADD COLUMN account_id INTEGER REFERENCES accounts(account_id)"
             )
+        self._migrate_optional_account_credentials()
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_accounts_free ON accounts(status, mmr DESC)"
+        )
         self.conn.commit()
+
+    def _migrate_optional_account_credentials(self):
+        columns = {
+            row["name"]: row for row in self.conn.execute("PRAGMA table_info(accounts)")
+        }
+        required_columns = {"login", "password_enc", "shared_secret_enc"}
+        if not required_columns.issubset(columns) or not any(
+            columns[name]["notnull"] for name in required_columns
+        ):
+            return
+
+        self.conn.execute("PRAGMA foreign_keys=OFF")
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            self.conn.execute("""
+                CREATE TABLE accounts_new (
+                    account_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    login TEXT UNIQUE,
+                    password_enc BLOB,
+                    shared_secret_enc BLOB,
+                    email_login TEXT,
+                    email_password_enc BLOB,
+                    steamid64 TEXT,
+                    dota_account_id TEXT,
+                    mmr INTEGER,
+                    behavior_score INTEGER,
+                    vac_banned INTEGER DEFAULT 0,
+                    status TEXT DEFAULT 'free',
+                    auto_change_password INTEGER DEFAULT 0,
+                    last_check TEXT,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            self.conn.execute("""
+                INSERT INTO accounts_new
+                SELECT account_id, login, password_enc, shared_secret_enc,
+                       email_login, email_password_enc, steamid64,
+                       dota_account_id, mmr, behavior_score, vac_banned, status,
+                       auto_change_password, last_check, created_at
+                FROM accounts
+            """)
+            self.conn.execute("DROP TABLE accounts")
+            self.conn.execute("ALTER TABLE accounts_new RENAME TO accounts")
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+        finally:
+            self.conn.execute("PRAGMA foreign_keys=ON")
 
     def close(self):
         self.conn.close()
@@ -205,20 +257,29 @@ class Database:
 
     def add_account(
         self,
-        login: str,
-        password: str,
-        shared_secret: str,
+        login: str | None = None,
+        password: str | None = None,
+        shared_secret: str | None = None,
         steamid64: str | None = None,
         dota_account_id: str | None = None,
         mmr: int | None = None,
         behavior_score: int | None = None,
     ) -> int:
-        if not login.strip() or not password or not shared_secret:
-            raise ValueError("Login, password, and shared secret are required")
-        if mmr is not None and mmr < 0:
-            raise ValueError("MMR must be non-negative")
-        if behavior_score is not None and behavior_score < 0:
-            raise ValueError("Behavior score must be non-negative")
+        supplied_credentials = any((login, password, shared_secret))
+        if supplied_credentials and not all(
+            (login and login.strip(), password, shared_secret)
+        ):
+            raise ValueError("Provide all credentials together or omit them all")
+        if not supplied_credentials and not (steamid64 or dota_account_id):
+            raise ValueError("A SteamID64 or Dota account ID is required")
+        if steamid64 and (not steamid64.isdecimal() or len(steamid64) != 17):
+            raise ValueError("SteamID64 must contain 17 digits")
+        if dota_account_id and not dota_account_id.isdecimal():
+            raise ValueError("Dota account ID must contain digits only")
+        if mmr is not None and not 0 <= mmr <= 15000:
+            raise ValueError("MMR must be between 0 and 15000")
+        if behavior_score is not None and not 0 <= behavior_score <= 12000:
+            raise ValueError("Behavior score must be between 0 and 12000")
         with self.conn:
             cur = self.conn.execute(
                 """INSERT INTO accounts
@@ -226,7 +287,9 @@ class Database:
                     dota_account_id, mmr, behavior_score, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    login.strip(), self.encrypt(password), self.encrypt(shared_secret),
+                    login.strip() if login else None,
+                    self.encrypt(password) if password else None,
+                    self.encrypt(shared_secret) if shared_secret else None,
                     steamid64.strip() if steamid64 and steamid64.strip() else None,
                     (
                         dota_account_id.strip()

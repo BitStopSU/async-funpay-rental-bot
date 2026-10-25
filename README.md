@@ -45,11 +45,10 @@ check `FUNPAY_GOLDEN_KEY` and sign in to FunPay again to obtain a fresh key.
 
 1. Создайте лот в FunPay один раз: установленная версия `aioFunPayAPI` умеет
    редактировать существующие лоты, но не создавать новые.
-2. Запустите `python add_account.py`, подтвердите ручную проверку и добавьте
-   аккаунт. Для автоматического MMR укажите Dota account ID. Пароль и shared
-   secret вводятся скрыто и шифруются Fernet; автоматического входа в Steam нет.
-   Введите ID уже созданного лота — бот сам получит из FunPay его название и
-   цену и привяжет его к новому аккаунту.
+2. Добавьте карточку аккаунта через Telegram: «Добавить аккаунт» и отправьте
+   Dota ID, при желании MMR и порядочность, например `1232330009 - 10334`.
+   Пароль, email-код и shared secret не нужны боту и не должны отправляться в
+   Telegram. Бот не входит в Steam и не проверяет доступ.
 3. Для привязки лота к ранее добавленному аккаунту используйте в Telegram
    «Привязать лот»: отправьте ID существующего объявления и выберите аккаунт.
    Либо выполните `python register_lot.py` локально. Вручную вводить название
@@ -65,10 +64,10 @@ check `FUNPAY_GOLDEN_KEY` and sign in to FunPay again to obtain a fresh key.
    связанный аккаунт; обработка заказа остаётся ручной.
 
 Create the FunPay listing once (the installed `aioFunPayAPI` can edit existing
-listings but does not support creating them). Run `python add_account.py`, confirm
-manual verification, enter the Dota account ID for automatic MMR checks, and
-provide the existing listing ID. The bot fetches the title and price from FunPay
-and links the listing to the new account; credentials remain hidden and encrypted.
+listings but does not support creating them). Add an account record from Telegram
+with its Dota account ID and, optionally, MMR and behavior score, for example
+`1232330009 - 10334`. The bot does not need or accept account passwords,
+email codes, or shared secrets; it does not sign in to Steam.
 For an account already in the database, use Telegram's “Link listing” menu to
 send the listing ID and choose the account, or run `python register_lot.py`
 locally. After linking, the bot updates
@@ -93,10 +92,10 @@ Inline-меню показывает состояние базы, аккаунт
 автоматически меняются только заголовок и описание. Новые MMR синхронизируются
 из OpenDota ежедневно. Новые лоты создаются на FunPay вручную один раз.
 
-Добавление аккаунта целиком через Telegram не поддерживается: пароль и shared
-secret вводятся скрыто только локальной командой `python add_account.py` и
-никогда не отправляются в Telegram. После этого управление привязкой и текстом
-объявления доступно в меню бота.
+Чтобы добавить карточку, нажмите «Добавить аккаунт» и отправьте Dota ID,
+необязательно дополнив его MMR и порядочностью. В Telegram-форме нет полей для
+логина, пароля, почты, email-кода или shared secret. Старые зашифрованные
+значения в ранее созданных записях не меняются; новые карточки их не содержат.
 
 Set `TG_BOT_TOKEN` and your numeric Telegram user ID in `TG_ADMIN_ID`, restart
 `python main.py`, and send `/start` to the bot in a private chat. The inline
@@ -106,10 +105,10 @@ admin ID is accepted. You can link a FunPay listing to a free account, edit
 non-secret account fields (SteamID64, Dota ID, MMR, and manually verified behavior
 score), change an existing listing's price, and sync listing text from this menu.
 Lot IDs, titles, and initial prices are read from FunPay; only listing title and
-description are changed automatically. New MMR values sync daily from OpenDota. New listings
-must still be created manually once. New account passwords and shared secrets
-must be entered locally with `python add_account.py` using hidden input, never
-sent through Telegram. Telegram long polling
+description are changed automatically. New MMR values sync daily from OpenDota.
+New listings must still be created manually once. Telegram account creation
+stores only the Dota ID and optional public listing values; it never asks for
+account or email credentials. Telegram long polling
 requires that the same bot token is not already being polled by another process
 and that no webhook is configured.
 

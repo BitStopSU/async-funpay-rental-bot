@@ -324,12 +324,18 @@ _MESSAGES = {
             "Лот {lot_id}: {title}; {price}/час; аккаунт: {account}"
         ),
         "admin_menu_add_account_text": (
-            "Секреты нельзя безопасно вводить в Telegram. На компьютере, где "
-            "находится база бота, выполните `python add_account.py`. Пароль и "
-            "shared secret вводятся скрыто и сохраняются зашифрованными. "
-            "После добавления несекретные поля аккаунта и привязку лота можно "
-            "менять здесь. Создайте лот в FunPay один раз; затем выберите "
-            "«Привязать лот»."
+            "Отправьте одной строкой: Dota ID [MMR] [порядочность]. "
+            "Пример: `1232330009 - 10334`. MMR и порядочность можно пропустить "
+            "или указать как `-`. Логин, пароль и коды сюда не отправляйте."
+        ),
+        "admin_menu_add_account_invalid": (
+            "Формат: Dota ID [MMR] [порядочность]. Нужен числовой Dota ID; "
+            "MMR — 0–15000, порядочность — 0–12000. Не отправляйте пароли или коды."
+        ),
+        "admin_menu_add_account_saved": (
+            "Карточка аккаунта создана: №{account_id}. Секреты не запрашивались "
+            "и не сохранялись. При необходимости измените несекретные поля и "
+            "привяжите лот через меню «Аккаунты»."
         ),
         "admin_menu_listing_text": (
             "Текущие значения MMR/порядочности и связанные лоты:\n"
@@ -343,8 +349,8 @@ _MESSAGES = {
             "получены автоматически; цену бот не меняет."
         ),
         "admin_menu_link_no_accounts": (
-            "Нет свободных аккаунтов без привязанного лота. Добавьте аккаунт "
-            "локально через add_account.py, не отправляя Steam-секреты в Telegram."
+            "Нет свободных аккаунтов без привязанного лота. Сначала добавьте "
+            "карточку без секретов через меню «Добавить аккаунт»."
         ),
         "admin_menu_link_choose_account": (
             "Выберите свободный аккаунт для этого лота:"
@@ -761,11 +767,18 @@ _MESSAGES = {
             "Listing {lot_id}: {title}; {price}/hour; account: {account}"
         ),
         "admin_menu_add_account_text": (
-            "Secrets cannot be safely entered through Telegram. On the computer "
-            "hosting the bot database, run `python add_account.py`. Password and "
-            "shared secret are hidden during input and stored encrypted. Other "
-            "account fields and listing links can be managed here. Create the "
-            "FunPay listing once, then choose “Link listing”."
+            "Send one line: Dota ID [MMR] [behavior score]. Example: "
+            "`1232330009 - 10334`. MMR and behavior can be omitted or entered "
+            "as `-`. Do not send logins, passwords, or codes here."
+        ),
+        "admin_menu_add_account_invalid": (
+            "Format: Dota ID [MMR] [behavior score]. Dota ID must be numeric; "
+            "MMR 0–15000, behavior 0–12000. Do not send passwords or codes."
+        ),
+        "admin_menu_add_account_saved": (
+            "Account record created: #{account_id}. No secrets were requested "
+            "or stored. Edit other non-secret fields or link a listing from the "
+            "Accounts menu."
         ),
         "admin_menu_listing_text": (
             "Current MMR/behavior values and linked listings:\n"
@@ -820,8 +833,8 @@ _MESSAGES = {
             "be fetched automatically; the bot does not change the price."
         ),
         "admin_menu_link_no_accounts": (
-            "No free unlinked accounts. Add an account locally with "
-            "add_account.py; do not send Steam secrets through Telegram."
+            "No free unlinked accounts. First add a no-secret account record "
+            "from the “Add account” menu."
         ),
         "admin_menu_link_choose_account": (
             "Choose a free account to link to this listing:"

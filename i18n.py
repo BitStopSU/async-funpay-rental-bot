@@ -106,7 +106,6 @@ _MESSAGES = {
             "TG_BOT_TOKEN и TG_ADMIN_ID"
         ),
         "funpay_key_missing": "Необходимо задать FUNPAY_GOLDEN_KEY",
-        "secret_key_missing": "В SECRET_KEY необходимо указать ключ Fernet",
         "telegram_rejected": "Telegram отклонил уведомление",
         "telegram_digest_failed": "Не удалось отправить дайджест уведомлений (%s)",
         "telegram_critical_failed": (
@@ -132,17 +131,6 @@ _MESSAGES = {
             "Не удалось выполнить ежедневные проверки аккаунтов (%s)"
         ),
         "steam_response_invalid": "В ответе Steam отсутствует список игроков",
-        "cli_add_login": "Логин Steam: ",
-        "cli_add_password": "Пароль Steam (ввод скрыт): ",
-        "cli_add_shared_secret": "Shared secret (ввод скрыт): ",
-        "cli_add_verified_prompt": (
-            "Подтверждаете, что вручную проверили данные и имеете право "
-            "добавить этот аккаунт? Введите ДА или YES: "
-        ),
-        "cli_add_verification_required": (
-            "Без ручной проверки аккаунт не добавлен. Автоматический вход в Steam "
-            "не выполнялся."
-        ),
         "cli_add_steamid": "SteamID64 (необязательно): ",
         "cli_add_dota_id": "ID аккаунта Dota (необязательно): ",
         "cli_add_dota_required": (
@@ -160,7 +148,7 @@ _MESSAGES = {
         ),
         "cli_lot_accounts_empty": (
             "Нет свободных аккаунтов без привязанного лота. Сначала добавьте "
-            "аккаунт через add_account.py."
+            "карточку через Telegram."
         ),
         "cli_lot_accounts_header": (
             "Свободные аккаунты без лота (локальный ID / Dota ID / MMR / "
@@ -446,13 +434,18 @@ _MESSAGES = {
         "admin_menu_settings_text": (
             "Настройки (значения секретов скрыты):\n"
             "FunPay: {funpay}\nTelegram-уведомления: {telegram}\n"
-            "Ключ шифрования: {encryption}\nSteam API: {steam_api}\n"
-            "База: {db_path}\nЯзык: {language}\n\n"
+            "Steam API: {steam_api}\n"
+            "База: {db_path}\nЯзык: {bot_language}\n\n"
             "Чтобы изменить параметры, отредактируйте `.env` на компьютере "
             "с ботом и перезапустите процесс."
         ),
         "admin_menu_configured": "настроено",
         "admin_menu_missing": "не настроено",
+        "cli_add_use_telegram": (
+            "Добавляйте карточки через Telegram: «Добавить аккаунт». "
+            "Скрипт больше не запрашивает и не хранит логин, пароль, почту "
+            "или Steam Guard secret."
+        ),
         "admin_menu_back": "↩️ В меню",
         "admin_status_free": "свободен",
         "admin_status_rented": "в аренде",
@@ -567,7 +560,6 @@ _MESSAGES = {
             "TG_BOT_TOKEN and TG_ADMIN_ID are required to send Telegram notifications"
         ),
         "funpay_key_missing": "FUNPAY_GOLDEN_KEY must be configured",
-        "secret_key_missing": "SECRET_KEY must contain a Fernet key",
         "telegram_rejected": "Telegram rejected the notification",
         "telegram_digest_failed": "Could not send notification digest (%s)",
         "telegram_critical_failed": (
@@ -588,17 +580,6 @@ _MESSAGES = {
         "daily_mmr_failed": "OpenDota MMR check failed for account #%s (%s)",
         "daily_checks_failed": "Daily account checks failed (%s)",
         "steam_response_invalid": "Steam bans response has no players list",
-        "cli_add_login": "Steam account login: ",
-        "cli_add_password": "Steam password (input hidden): ",
-        "cli_add_shared_secret": "Shared secret (input hidden): ",
-        "cli_add_verified_prompt": (
-            "Confirm you manually checked the details and are authorized to add "
-            "this account? Type YES or ДА: "
-        ),
-        "cli_add_verification_required": (
-            "Account was not added without manual verification. No Steam sign-in "
-            "was performed."
-        ),
         "cli_add_steamid": "SteamID64 (optional): ",
         "cli_add_dota_id": "Dota account ID (optional): ",
         "cli_add_dota_required": (
@@ -613,7 +594,7 @@ _MESSAGES = {
         ),
         "cli_lot_account_choice": "Local account ID to link to this listing: ",
         "cli_lot_accounts_empty": (
-            "No free unlinked accounts. Add an account first with add_account.py."
+            "No free unlinked accounts. Add an account record in Telegram first."
         ),
         "cli_lot_accounts_header": (
             "Free unlinked accounts (local ID / Dota ID / MMR / behavior score):"
@@ -886,13 +867,18 @@ _MESSAGES = {
         "admin_menu_settings_text": (
             "Settings (secret values are hidden):\n"
             "FunPay: {funpay}\nTelegram notifications: {telegram}\n"
-            "Encryption key: {encryption}\nSteam API: {steam_api}\n"
-            "Database: {db_path}\nLanguage: {language}\n\n"
+            "Steam API: {steam_api}\n"
+            "Database: {db_path}\nLanguage: {bot_language}\n\n"
             "To change settings, edit `.env` on the bot computer and restart "
             "the process."
         ),
         "admin_menu_configured": "configured",
         "admin_menu_missing": "not configured",
+        "cli_add_use_telegram": (
+            "Add account records in Telegram using “Add account”. This script "
+            "no longer requests or stores logins, passwords, email, or Steam "
+            "Guard secrets."
+        ),
         "admin_menu_back": "↩️ Menu",
         "admin_status_free": "free",
         "admin_status_rented": "rented",

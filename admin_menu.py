@@ -266,10 +266,9 @@ def _settings_text() -> str:
             if Config.TG_BOT_TOKEN and Config.TG_ADMIN_ID
             else missing
         ),
-        encryption=configured if Config.SECRET_KEY else missing,
         steam_api=configured if Config.STEAM_API_KEY else missing,
         db_path=Config.DB_PATH,
-        language=Config.BOT_LANGUAGE,
+        bot_language=Config.BOT_LANGUAGE,
     )
 
 

@@ -12,23 +12,52 @@ used when the setting is omitted.
 
 ## Запуск / Running
 
-Установите зависимости командой `python -m pip install -r requirements.txt`,
-скопируйте `.env.example` в `.env`, заполните переменные и запустите
-`python main.py`. Для `SECRET_KEY` сгенерируйте ключ Fernet командой
-`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+Для запуска требуется Python 3.10 или новее. Запустите `start.bat` из папки
+программы: скрипт создаст виртуальное окружение, установит зависимости и при
+первом запуске откроет `.env.example` для настройки. После настройки сохраните
+`.env` и нажмите Enter в окне запуска. Для ручного запуска можно выполнить
+`python -m pip install -r requirements.txt`, скопировать `.env.example` в
+`.env` и запустить `python main.py`. Создавайте карточки аккаунтов в Telegram:
+бот принимает только Dota ID и необязательные публичные игровые показатели.
 
-Install dependencies with `python -m pip install -r requirements.txt`, copy
-`.env.example` to `.env`, fill in the variables, then run `python main.py`.
-Generate a Fernet key for `SECRET_KEY` with
-`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+Python 3.10 or newer is required. Run `start.bat` from the program folder: it
+creates a virtual environment, installs dependencies, and opens `.env.example`
+for configuration on first launch. Save the resulting `.env` and press Enter
+in the launcher window. To start manually, install dependencies with
+`python -m pip install -r requirements.txt`, copy `.env.example` to `.env`, and
+run `python main.py`. Create account records in Telegram; the bot accepts only a
+Dota ID and optional public game statistics.
+
+## Windows installer
+
+В GitHub Packages нельзя публиковать произвольный файл `.exe`, поэтому
+установщик распространяется в разделе **Releases**. Создайте тег версии вида
+`v1.0.0` и отправьте его в GitHub: workflow автоматически соберёт
+`AsyncFunPayRentalBot-Setup.exe` и добавит его к релизу. Установщик ставит
+файлы в папку пользователя и создаёт ярлыки в меню «Пуск» и на рабочем столе.
+Для запуска нужен установленный Python 3.10 или новее; при первом запуске
+создаются виртуальное окружение и `.env`. В `.env` нужно указать настройки
+Telegram и FunPay.
+
+GitHub Packages does not host arbitrary `.exe` files, so the installer is
+distributed from **Releases**. Push a version tag such as `v1.0.0` to GitHub;
+the workflow builds `AsyncFunPayRentalBot-Setup.exe` and attaches it to the
+release. The installer places the files in the user's profile and creates
+Start-menu and optional desktop shortcuts. Python 3.10 or newer must already be
+installed. The first launch creates a virtual environment and `.env`; configure
+the Telegram and FunPay settings there.
 
 Не добавляйте секреты в этот файл или в систему контроля версий. Автоматическое
 получение Steam/email-кодов, вход в аккаунты и смена паролей не поддерживаются;
-такие задачи требуют ручной обработки.
+такие задачи требуют ручной обработки. При запуске старая схема БД мигрирует:
+из таблицы аккаунтов удаляются сохранённые логины и секреты, остальные данные
+аккаунтов, аренды и привязки лотов сохраняются.
 
 Do not put secrets in this file or in version control. Automated access to Steam
 or email codes, account sign-in, and password changes are not supported; these
-tasks require manual handling.
+tasks require manual handling. On startup, the old database schema is migrated:
+stored account logins and secrets are removed while other account data, rentals,
+and listing links are preserved.
 
 Бот сохраняет `PHPSESSID` и дополнительную cookie `golden_seal`, которую FunPay
 выдаёт при авторизации. Если FunPay отклоняет cookie как устаревшую, бот обновляет
@@ -95,7 +124,8 @@ Inline-меню показывает состояние базы, аккаунт
 Чтобы добавить карточку, нажмите «Добавить аккаунт» и отправьте Dota ID,
 необязательно дополнив его MMR и порядочностью. В Telegram-форме нет полей для
 логина, пароля, почты, email-кода или shared secret. Старые зашифрованные
-значения в ранее созданных записях не меняются; новые карточки их не содержат.
+значения удаляются из SQLite при первом запуске новой версии; несекретные
+данные аккаунтов, аренды и привязки лотов сохраняются.
 
 Set `TG_BOT_TOKEN` and your numeric Telegram user ID in `TG_ADMIN_ID`, restart
 `python main.py`, and send `/start` to the bot in a private chat. The inline

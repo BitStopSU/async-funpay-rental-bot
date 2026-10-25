@@ -4,8 +4,6 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import Any
 
-from cryptography.fernet import Fernet
-
 from config import Config
 from i18n import tr
 
@@ -16,9 +14,6 @@ def current_time() -> datetime:
 
 class Database:
     def __init__(self, path: str | None = None):
-        if not Config.SECRET_KEY:
-            raise ValueError(tr("secret_key_missing"))
-        self.cipher = Fernet(Config.SECRET_KEY.encode())
         self.conn = sqlite3.connect(
             path or Config.DB_PATH, check_same_thread=False, timeout=30
         )
@@ -26,6 +21,7 @@ class Database:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.execute("PRAGMA busy_timeout=30000")
+        self.conn.execute("PRAGMA secure_delete=ON")
         self._init_schema()
 
     def _init_schema(self):
@@ -42,11 +38,6 @@ class Database:
         );
         CREATE TABLE IF NOT EXISTS accounts (
             account_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            login TEXT UNIQUE,
-            password_enc BLOB,
-            shared_secret_enc BLOB,
-            email_login TEXT,
-            email_password_enc BLOB,
             steamid64 TEXT,
             dota_account_id TEXT,
             mmr INTEGER,
@@ -142,20 +133,24 @@ class Database:
             self.conn.execute(
                 "ALTER TABLE lots ADD COLUMN account_id INTEGER REFERENCES accounts(account_id)"
             )
-        self._migrate_optional_account_credentials()
+        self._migrate_remove_account_credentials()
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_accounts_free ON accounts(status, mmr DESC)"
         )
         self.conn.commit()
 
-    def _migrate_optional_account_credentials(self):
+    def _migrate_remove_account_credentials(self):
         columns = {
-            row["name"]: row for row in self.conn.execute("PRAGMA table_info(accounts)")
+            row["name"] for row in self.conn.execute("PRAGMA table_info(accounts)")
         }
-        required_columns = {"login", "password_enc", "shared_secret_enc"}
-        if not required_columns.issubset(columns) or not any(
-            columns[name]["notnull"] for name in required_columns
-        ):
+        secret_columns = {
+            "login",
+            "password_enc",
+            "shared_secret_enc",
+            "email_login",
+            "email_password_enc",
+        }
+        if not columns.intersection(secret_columns):
             return
 
         self.conn.execute("PRAGMA foreign_keys=OFF")
@@ -164,11 +159,6 @@ class Database:
             self.conn.execute("""
                 CREATE TABLE accounts_new (
                     account_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    login TEXT UNIQUE,
-                    password_enc BLOB,
-                    shared_secret_enc BLOB,
-                    email_login TEXT,
-                    email_password_enc BLOB,
                     steamid64 TEXT,
                     dota_account_id TEXT,
                     mmr INTEGER,
@@ -181,11 +171,13 @@ class Database:
                 )
             """)
             self.conn.execute("""
-                INSERT INTO accounts_new
-                SELECT account_id, login, password_enc, shared_secret_enc,
-                       email_login, email_password_enc, steamid64,
-                       dota_account_id, mmr, behavior_score, vac_banned, status,
-                       auto_change_password, last_check, created_at
+                INSERT INTO accounts_new (
+                    account_id, steamid64, dota_account_id, mmr, behavior_score,
+                    vac_banned, status, auto_change_password, last_check, created_at
+                )
+                SELECT account_id, steamid64, dota_account_id, mmr,
+                       behavior_score, vac_banned, status, auto_change_password,
+                       last_check, created_at
                 FROM accounts
             """)
             self.conn.execute("DROP TABLE accounts")
@@ -196,15 +188,10 @@ class Database:
             raise
         finally:
             self.conn.execute("PRAGMA foreign_keys=ON")
+        self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def close(self):
         self.conn.close()
-
-    def encrypt(self, value: str) -> bytes:
-        return self.cipher.encrypt(value.encode())
-
-    def decrypt(self, value: bytes) -> str:
-        return self.cipher.decrypt(value).decode()
 
     def get_or_create_user(self, nick: str) -> int:
         now = current_time().isoformat()
@@ -257,20 +244,12 @@ class Database:
 
     def add_account(
         self,
-        login: str | None = None,
-        password: str | None = None,
-        shared_secret: str | None = None,
         steamid64: str | None = None,
         dota_account_id: str | None = None,
         mmr: int | None = None,
         behavior_score: int | None = None,
     ) -> int:
-        supplied_credentials = any((login, password, shared_secret))
-        if supplied_credentials and not all(
-            (login and login.strip(), password, shared_secret)
-        ):
-            raise ValueError("Provide all credentials together or omit them all")
-        if not supplied_credentials and not (steamid64 or dota_account_id):
+        if not (steamid64 or dota_account_id):
             raise ValueError("A SteamID64 or Dota account ID is required")
         if steamid64 and (not steamid64.isdecimal() or len(steamid64) != 17):
             raise ValueError("SteamID64 must contain 17 digits")
@@ -283,13 +262,9 @@ class Database:
         with self.conn:
             cur = self.conn.execute(
                 """INSERT INTO accounts
-                   (login, password_enc, shared_secret_enc, steamid64,
-                    dota_account_id, mmr, behavior_score, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (steamid64, dota_account_id, mmr, behavior_score, created_at)
+                   VALUES (?, ?, ?, ?, ?)""",
                 (
-                    login.strip() if login else None,
-                    self.encrypt(password) if password else None,
-                    self.encrypt(shared_secret) if shared_secret else None,
                     steamid64.strip() if steamid64 and steamid64.strip() else None,
                     (
                         dota_account_id.strip()

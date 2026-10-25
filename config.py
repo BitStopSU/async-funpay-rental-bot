@@ -19,7 +19,6 @@ class Config:
 
     # База
     DB_PATH = os.getenv("DB_PATH", "rental.db")
-    SECRET_KEY = os.getenv("SECRET_KEY")
 
     # Публичные проверки
     STEAM_API_KEY = os.getenv("STEAM_API_KEY")

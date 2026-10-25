@@ -2,20 +2,10 @@
 setlocal
 cd /d "%~dp0"
 
-where py >nul 2>nul
-if %errorlevel%==0 (
-    set "PYTHON=py -3"
-) else (
-    where python >nul 2>nul
-    if errorlevel 1 (
-        echo Python 3.10 or newer is required. Install Python and enable the Python launcher.
-        pause
-        exit /b 1
-    )
-    set "PYTHON=python"
-)
-
-%PYTHON% -c "import sys; raise SystemExit(sys.version_info < (3, 10))"
+set "PYTHON=py -3"
+%PYTHON% -c "import sys; raise SystemExit(sys.version_info < (3, 10))" >nul 2>nul
+if errorlevel 1 set "PYTHON=python"
+%PYTHON% -c "import sys; raise SystemExit(sys.version_info < (3, 10))" >nul 2>nul
 if errorlevel 1 (
     echo Python 3.10 or newer is required.
     pause

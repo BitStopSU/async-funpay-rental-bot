@@ -70,6 +70,9 @@ _MESSAGES = {
         "secret_key_missing": "В SECRET_KEY необходимо указать ключ Fernet",
         "telegram_rejected": "Telegram отклонил уведомление",
         "telegram_digest_failed": "Не удалось отправить дайджест уведомлений (%s)",
+        "telegram_critical_failed": (
+            "Не удалось немедленно отправить критическое уведомление (%s)"
+        ),
         "telegram_password_task": (
             "Для аккаунта №{account_id} требуется ручная проверка пароля "
             "(задача №{task_id}). Автоматический доступ к паролю или почте "
@@ -248,6 +251,9 @@ _MESSAGES = {
         "secret_key_missing": "SECRET_KEY must contain a Fernet key",
         "telegram_rejected": "Telegram rejected the notification",
         "telegram_digest_failed": "Could not send notification digest (%s)",
+        "telegram_critical_failed": (
+            "Could not immediately send critical notification (%s)"
+        ),
         "telegram_password_task": (
             "Account #{account_id} requires a manual password review "
             "(task #{task_id}). No automatic password or email access was performed."

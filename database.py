@@ -617,12 +617,21 @@ class Database:
                 (current_time().isoformat(), text[:4000], severity),
             )
 
-    def get_pending_notifications(self, limit: int = 20):
+    def get_pending_notifications(
+        self, limit: int = 20, severity: str | None = None
+    ):
+        if severity is None:
+            return self.conn.execute(
+                """SELECT notification_id, text, severity FROM notifications
+                   WHERE sent = 0
+                   ORDER BY notification_id LIMIT ?""",
+                (limit,),
+            ).fetchall()
         return self.conn.execute(
             """SELECT notification_id, text, severity FROM notifications
-               WHERE sent = 0
+               WHERE sent = 0 AND severity = ?
                ORDER BY notification_id LIMIT ?""",
-            (limit,),
+            (severity, limit),
         ).fetchall()
 
     def mark_notifications_sent(self, ids: list[int]):

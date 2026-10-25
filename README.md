@@ -80,3 +80,7 @@ admin ID is accepted. Account credentials must be entered locally with
 `python add_account.py`, not sent through Telegram. Telegram long polling
 requires that the same bot token is not already being polled by another process
 and that no webhook is configured.
+
+Critical alerts (for example, a newly detected VAC ban) are sent to the
+administrator shortly after they are queued. Warning notifications are grouped
+into the hourly digest. Both require the Telegram token and admin ID above.

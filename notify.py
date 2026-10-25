@@ -8,6 +8,7 @@ from database import Database
 from i18n import tr, severity_label
 
 logger = logging.getLogger(__name__)
+CRITICAL_NOTIFICATION_INTERVAL = 5
 
 
 async def send_tg(text: str):
@@ -31,15 +32,10 @@ async def critical(text: str):
 async def digest_loop(db: Database):
     while True:
         await asyncio.sleep(Config.NOTIFICATION_DIGEST_INTERVAL)
-        rows = db.get_pending_notifications()
+        rows = db.get_pending_notifications(severity="warning")
         if not rows:
             continue
-        title_key = (
-            "digest_critical_title"
-            if any(row["severity"] == "critical" for row in rows)
-            else "digest_warning_title"
-        )
-        summary = tr(title_key) + "\n" + "\n".join(
+        summary = tr("digest_warning_title") + "\n" + "\n".join(
             f"[{severity_label(row['severity'])}] {row['text']}" for row in rows
         )
         try:
@@ -53,3 +49,36 @@ async def digest_loop(db: Database):
             "notification_digest_sent",
             details={"notification_ids": [row["notification_id"] for row in rows]},
         )
+
+
+async def critical_notification_loop(db: Database):
+    """Deliver critical alerts promptly instead of waiting for the hourly digest."""
+    if not Config.TG_BOT_TOKEN or not Config.TG_ADMIN_ID:
+        logger.info(tr("admin_menu_not_configured"))
+        return
+
+    while True:
+        rows = db.get_pending_notifications(severity="critical")
+        for row in rows:
+            try:
+                await critical(row["text"])
+            except Exception as exc:
+                logger.error(
+                    tr("telegram_critical_failed"), type(exc).__name__
+                )
+                db.log(
+                    "critical_notification_failed",
+                    details={
+                        "notification_id": row["notification_id"],
+                        "error_type": type(exc).__name__,
+                    },
+                    severity="error",
+                )
+                break
+            db.mark_notifications_sent([row["notification_id"]])
+            db.log(
+                "critical_notification_sent",
+                details={"notification_id": row["notification_id"]},
+                severity="critical",
+            )
+        await asyncio.sleep(CRITICAL_NOTIFICATION_INTERVAL)

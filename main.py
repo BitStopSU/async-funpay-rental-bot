@@ -6,7 +6,7 @@ from config import Config
 from daily_checks import daily_checks
 from database import Database
 from funpay_bot import RentalBot
-from notify import digest_loop
+from notify import critical_notification_loop, digest_loop
 from password_worker import password_worker
 
 
@@ -21,6 +21,9 @@ async def main():
         asyncio.create_task(daily_checks(db), name="daily-account-checks"),
         asyncio.create_task(password_worker(db), name="manual-password-tasks"),
         asyncio.create_task(digest_loop(db), name="notification-digest"),
+        asyncio.create_task(
+            critical_notification_loop(db), name="critical-notifications"
+        ),
         asyncio.create_task(admin_menu_loop(db), name="telegram-admin-menu"),
     ]
     try:

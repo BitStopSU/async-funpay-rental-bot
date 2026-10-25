@@ -91,3 +91,25 @@ and that no webhook is configured.
 Critical alerts (for example, a newly detected VAC ban) are sent to the
 administrator shortly after they are queued. Warning notifications are grouped
 into the hourly digest. Both require the Telegram token and admin ID above.
+
+После оплаты бот просит покупателя отправить скрин профиля Dota 2 в FunPay-чат
+после получения доступа. Изображение пересылается в личный чат администратора
+Telegram с номером заказа, ником и датой; Telegram хранит фото, SQLite сохраняет
+только идентификатор сообщения/файла и аудит. Бот принимает изображения только
+из HTTPS-ссылок FunPay и не сохраняет их локально. Администратор вручную
+проверяет MMR, порядочность и видимые признаки читов; OCR или автоматического
+решения нет. Сомнительный скрин не следует использовать. Принятый скрин можно
+загрузить на FunPay вручную: установленная библиотека не поддерживает замену
+главной картинки лота. Не просите покупателей присылать пароль, код, email или
+другие секреты.
+
+After payment, the bot asks the buyer to send a Dota 2 profile screenshot in
+the FunPay chat once the operator has provided access. It forwards the image to
+the administrator's private Telegram chat with order number, buyer nickname,
+and date. Telegram stores the image; SQLite keeps only Telegram message/file
+IDs and an audit record. Images are accepted only from HTTPS FunPay links and
+are not stored locally. The administrator manually checks MMR, behavior score,
+and visible signs of cheats; there is no OCR or automated decision. Do not use
+a questionable screenshot. Upload an approved screenshot to the FunPay listing
+manually because the installed library does not support replacing a listing's
+main image. Never ask buyers for passwords, codes, email, or other secrets.

@@ -25,6 +25,25 @@ async def send_tg(text: str):
             raise RuntimeError(tr("telegram_rejected"))
 
 
+async def send_tg_photo(photo_url: str, caption: str) -> dict:
+    if not Config.TG_BOT_TOKEN or not Config.TG_ADMIN_ID:
+        raise RuntimeError(tr("telegram_credentials_missing"))
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            f"https://api.telegram.org/bot{Config.TG_BOT_TOKEN}/sendPhoto",
+            json={
+                "chat_id": Config.TG_ADMIN_ID,
+                "photo": photo_url,
+                "caption": caption[:1024],
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not payload.get("ok") or not isinstance(payload.get("result"), dict):
+            raise RuntimeError(tr("telegram_rejected"))
+        return payload["result"]
+
+
 async def critical(text: str):
     await send_tg(f"🚨 {text}")
 

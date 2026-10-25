@@ -107,6 +107,19 @@ class Database:
             order_type TEXT NOT NULL,
             processed_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS screenshot_submissions (
+            submission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id TEXT NOT NULL REFERENCES rentals(order_id),
+            account_id INTEGER NOT NULL REFERENCES accounts(account_id),
+            buyer_nick TEXT NOT NULL,
+            source_chat_id TEXT NOT NULL,
+            source_message_id TEXT NOT NULL,
+            submitted_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'sending',
+            telegram_message_id INTEGER,
+            telegram_file_id TEXT,
+            UNIQUE (source_chat_id, source_message_id)
+        );
         CREATE INDEX IF NOT EXISTS idx_rentals_expiry ON rentals(status, ends_at);
         CREATE INDEX IF NOT EXISTS idx_accounts_free ON accounts(status, mmr DESC);
         CREATE INDEX IF NOT EXISTS idx_notifications_pending
@@ -232,6 +245,98 @@ class Database:
                FROM accounts WHERE account_id = ?""",
             (account_id,),
         ).fetchone()
+
+    def start_screenshot_submission(
+        self,
+        order_id: str,
+        account_id: int,
+        buyer_nick: str,
+        source_chat_id: str,
+        source_message_id: str,
+    ) -> int | None:
+        with self.conn:
+            cur = self.conn.execute(
+                """INSERT OR IGNORE INTO screenshot_submissions
+                   (order_id, account_id, buyer_nick, source_chat_id,
+                    source_message_id, submitted_at, status)
+                   VALUES (?, ?, ?, ?, ?, ?, 'sending')""",
+                (
+                    str(order_id),
+                    account_id,
+                    buyer_nick,
+                    str(source_chat_id),
+                    str(source_message_id),
+                    current_time().isoformat(),
+                ),
+            )
+            if cur.rowcount == 0:
+                return None
+            submission_id = cur.lastrowid
+            self.log(
+                "profile_screenshot_received",
+                account_id=account_id,
+                order_id=str(order_id),
+                details={
+                    "submission_id": submission_id,
+                    "source_message_id": str(source_message_id),
+                },
+            )
+            return submission_id
+
+    def mark_screenshot_submission_sent(
+        self,
+        submission_id: int,
+        telegram_message_id: int,
+        telegram_file_id: str | None,
+    ):
+        with self.conn:
+            row = self.conn.execute(
+                """SELECT order_id, account_id FROM screenshot_submissions
+                   WHERE submission_id = ? AND status = 'sending'""",
+                (submission_id,),
+            ).fetchone()
+            if not row:
+                return False
+            self.conn.execute(
+                """UPDATE screenshot_submissions
+                   SET status = 'sent', telegram_message_id = ?,
+                       telegram_file_id = ?
+                   WHERE submission_id = ? AND status = 'sending'""",
+                (telegram_message_id, telegram_file_id, submission_id),
+            )
+            self.log(
+                "profile_screenshot_stored_in_telegram",
+                account_id=row["account_id"],
+                order_id=row["order_id"],
+                details={
+                    "submission_id": submission_id,
+                    "telegram_message_id": telegram_message_id,
+                },
+            )
+            return True
+
+    def mark_screenshot_submission_failed(self, submission_id: int):
+        with self.conn:
+            row = self.conn.execute(
+                """SELECT order_id, account_id FROM screenshot_submissions
+                   WHERE submission_id = ? AND status = 'sending'""",
+                (submission_id,),
+            ).fetchone()
+            if not row:
+                return False
+            self.conn.execute(
+                """UPDATE screenshot_submissions SET status = 'failed'
+                   WHERE submission_id = ? AND status = 'sending'""",
+                (submission_id,),
+            )
+            self.log(
+                "profile_screenshot_telegram_delivery_failed",
+                account_id=row["account_id"],
+                order_id=row["order_id"],
+                details={"submission_id": submission_id},
+                severity="error",
+            )
+            return True
 
     def set_account_status(self, account_id: int, status: str):
         if status not in {"free", "rented", "banned", "maintenance"}:

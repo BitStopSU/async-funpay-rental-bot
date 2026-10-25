@@ -1,13 +1,18 @@
 import asyncio
 import logging
 import sqlite3
+from datetime import datetime
+from urllib.parse import urlsplit
 
+import httpx
 from aioFunPayAPI import Account, Runner
 from aioFunPayAPI.common.enums import EventTypes, OrderStatuses
 from aioFunPayAPI.common.exceptions import RequestFailedError
 
+from config import Config
 from database import Database
 from i18n import tr
+from notify import send_tg_photo
 from ticker import expiry_ticker
 
 logger = logging.getLogger(__name__)
@@ -248,7 +253,7 @@ class RentalBot:
         )
         await self.acc.send_message(
             chat_id,
-            tr("manual_fulfillment"),
+            tr("manual_fulfillment") + "\n\n" + tr("profile_screenshot_request"),
         )
         self.db.log(
             "rental_requires_manual_fulfillment", user_id=user_id,
@@ -259,6 +264,9 @@ class RentalBot:
     async def on_message(self, event):
         message = event.message
         if str(message.author_id) == str(self.acc.id):
+            return
+        if message.image_link:
+            await self.on_profile_screenshot(message)
             return
         text = (message.text or "").lower().strip()
         if text not in ("!код", "код", "guard"):
@@ -274,4 +282,104 @@ class RentalBot:
             account_id=rental["account_id"] if rental else None,
             order_id=rental["order_id"] if rental else None,
             details={"chat_id": str(message.chat_id)},
+        )
+
+    async def on_profile_screenshot(self, message):
+        rental = self.db.get_active_rental_by_chat(str(message.chat_id))
+        if not rental:
+            await self.acc.send_message(
+                message.chat_id, tr("profile_screenshot_no_active_rental")
+            )
+            return
+        if not Config.TG_BOT_TOKEN or not Config.TG_ADMIN_ID:
+            self.db.log(
+                "profile_screenshot_not_stored",
+                account_id=rental["account_id"],
+                order_id=rental["order_id"],
+                details={"reason": "telegram_not_configured"},
+                severity="warning",
+            )
+            await self.acc.send_message(
+                message.chat_id, tr("profile_screenshot_admin_unavailable")
+            )
+            return
+
+        image_url = message.image_link
+        try:
+            parsed_url = urlsplit(image_url)
+            image_port = parsed_url.port
+        except ValueError:
+            parsed_url = None
+            image_port = None
+        hostname = (parsed_url.hostname or "").casefold() if parsed_url else ""
+        if (
+            not parsed_url
+            or parsed_url.scheme != "https"
+            or image_port not in (None, 443)
+            or not hostname
+            or not (hostname == "funpay.com" or hostname.endswith(".funpay.com"))
+            or parsed_url.username
+            or parsed_url.password
+        ):
+            self.db.log(
+                "profile_screenshot_rejected",
+                account_id=rental["account_id"],
+                order_id=rental["order_id"],
+                details={"reason": "unsupported_image_url"},
+                severity="warning",
+            )
+            await self.acc.send_message(
+                message.chat_id, tr("profile_screenshot_invalid")
+            )
+            return
+
+        submission_id = self.db.start_screenshot_submission(
+            order_id=rental["order_id"],
+            account_id=rental["account_id"],
+            buyer_nick=rental["buyer_nick"],
+            source_chat_id=str(message.chat_id),
+            source_message_id=str(message.id),
+        )
+        if submission_id is None:
+            return
+
+        submitted_at = self.db.conn.execute(
+            """SELECT submitted_at FROM screenshot_submissions
+               WHERE submission_id = ?""",
+            (submission_id,),
+        ).fetchone()["submitted_at"]
+        caption = tr(
+            "profile_screenshot_admin_caption",
+            order_id=rental["order_id"],
+            buyer=rental["buyer_nick"],
+            submitted_at=datetime.fromisoformat(submitted_at).strftime(
+                "%d.%m.%Y %H:%M"
+            ),
+            lot_id=rental["lot_id"],
+        )
+        try:
+            telegram_message = await send_tg_photo(image_url, caption)
+        except (httpx.HTTPError, RuntimeError, KeyError, TypeError) as exc:
+            self.db.mark_screenshot_submission_failed(submission_id)
+            self.db.queue_notification(
+                tr(
+                    "profile_screenshot_delivery_failed",
+                    order_id=rental["order_id"],
+                    error=type(exc).__name__,
+                )
+            )
+            await self.acc.send_message(
+                message.chat_id, tr("profile_screenshot_delivery_failed_buyer")
+            )
+            return
+
+        photos = telegram_message.get("photo") or []
+        telegram_file_id = photos[-1].get("file_id") if photos else None
+        self.db.mark_screenshot_submission_sent(
+            submission_id,
+            telegram_message["message_id"],
+            telegram_file_id,
+        )
+        await self.acc.send_message(
+            message.chat_id, tr("profile_screenshot_received")
         )

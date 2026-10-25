@@ -16,6 +16,45 @@ _MESSAGES = {
             "Оплата получена, заказ зарегистрирован. Для дальнейших действий "
             "обратитесь к оператору."
         ),
+        "profile_screenshot_request": (
+            "После того как оператор предоставит доступ, отправьте сюда скрин "
+            "профиля Dota 2. Администратор вручную проверит MMR, порядочность и "
+            "видимые признаки читов. Фото будет храниться в Telegram у "
+            "администратора и может быть размещено в объявлении после проверки. "
+            "Отправляя его, вы соглашаетесь на это. Не включайте логин, пароль, "
+            "почту, коды или личную переписку."
+        ),
+        "profile_screenshot_no_active_rental": (
+            "Скриншот профиля принимается только в чате с активной арендой."
+        ),
+        "profile_screenshot_admin_unavailable": (
+            "Сейчас передать скриншот на проверку не удалось. Свяжитесь с оператором."
+        ),
+        "profile_screenshot_invalid": (
+            "Не удалось безопасно обработать изображение. Отправьте скриншот "
+            "как изображение прямо в этом FunPay-чате."
+        ),
+        "profile_screenshot_admin_caption": (
+            "Скрин профиля — заказ №{order_id}\n"
+            "Покупатель FunPay: {buyer}\n"
+            "Дата: {submitted_at}\n"
+            "Лот: {lot_id}\n\n"
+            "Проверьте вручную MMR, порядочность и видимые признаки читов. "
+            "При сомнениях не используйте скрин в объявлении. "
+            "Используйте публично только с согласием покупателя. "
+            "Автораспознавание не выполняется; фото на лоте заменяется вручную."
+        ),
+        "profile_screenshot_delivery_failed": (
+            "Не удалось сохранить скриншот заказа №{order_id} в Telegram "
+            "(ошибка {error})."
+        ),
+        "profile_screenshot_delivery_failed_buyer": (
+            "Не получилось передать скриншот администратору. Пожалуйста, "
+            "повторите отправку или свяжитесь с оператором."
+        ),
+        "profile_screenshot_received": (
+            "Скриншот получен и передан администратору для ручной проверки."
+        ),
         "credential_request_active": (
             "Автоматическая выдача кодов и данных аккаунта отключена. "
             "Обратитесь к оператору."
@@ -163,6 +202,12 @@ _MESSAGES = {
             "единица — 1 час, 3 единицы — 3 часа.\n"
             "После покупки заказ обрабатывается оператором вручную. "
             "Автоматическая выдача данных не поддерживается.\n\n"
+            "После предоставления доступа отправьте скрин профиля Dota 2 в этот "
+            "FunPay-чат. Администратор вручную проверит MMR, порядочность и "
+            "видимые признаки читов. Скрин будет храниться в Telegram у "
+            "администратора и может быть размещён в объявлении после проверки; "
+            "отправляя его, вы соглашаетесь на это. Не включайте логин, пароль, "
+            "почту, коды или личную переписку.\n\n"
             "Разрешено: менять имя и аватар, играть в доступные режимы.\n\n"
             "Запрещено: читы, скрипты и другие нарушения правил игры; "
             "изменение данных аккаунта; порча матчей и токсичное поведение.\n\n"
@@ -260,6 +305,45 @@ _MESSAGES = {
         "manual_fulfillment": (
             "Payment received and order registered. Please contact an operator "
             "for further assistance."
+        ),
+        "profile_screenshot_request": (
+            "After the operator provides access, send a Dota 2 profile screenshot "
+            "here. The administrator will manually check MMR, behavior score, and "
+            "visible signs of cheats. The photo will be stored in the administrator's "
+            "Telegram and may be used in the listing after review. Sending it means "
+            "you agree to this. Do not include login details, passwords, email "
+            "addresses, codes, or private chats."
+        ),
+        "profile_screenshot_no_active_rental": (
+            "Profile screenshots are accepted only in a chat with an active rental."
+        ),
+        "profile_screenshot_admin_unavailable": (
+            "The screenshot could not be sent for review right now. Please contact an operator."
+        ),
+        "profile_screenshot_invalid": (
+            "The image could not be processed safely. Send the screenshot as an "
+            "image directly in this FunPay chat."
+        ),
+        "profile_screenshot_admin_caption": (
+            "Profile screenshot — order #{order_id}\n"
+            "FunPay buyer: {buyer}\n"
+            "Date: {submitted_at}\n"
+            "Listing: {lot_id}\n\n"
+            "Manually check MMR, behavior score, and visible signs of cheats. "
+            "Do not use a questionable screenshot in the listing. No OCR is used; "
+            "only use it publicly with the buyer's consent. The listing photo "
+            "must be replaced manually."
+        ),
+        "profile_screenshot_delivery_failed": (
+            "Could not store the screenshot for order #{order_id} in Telegram "
+            "(error {error})."
+        ),
+        "profile_screenshot_delivery_failed_buyer": (
+            "The screenshot could not be delivered to the administrator. Please "
+            "send it again or contact the operator."
+        ),
+        "profile_screenshot_received": (
+            "Screenshot received and forwarded to the administrator for manual review."
         ),
         "credential_request_active": (
             "Automatic delivery of account details and codes is disabled. "
@@ -392,6 +476,12 @@ _MESSAGES = {
             "1 hour and 3 units are 3 hours.\n"
             "After purchase, an operator handles the order manually. Automatic "
             "credential delivery is not supported.\n\n"
+            "After the operator provides access, send a Dota 2 profile screenshot "
+            "in this FunPay chat. The administrator manually checks the visible "
+            "MMR, behavior score, and signs of cheats. The screenshot is stored in "
+            "the administrator's Telegram and may be used in the listing after "
+            "review; sending it means you agree. Do not include credentials, email "
+            "codes, or private chats.\n\n"
             "Allowed: change name and avatar, play available modes.\n\n"
             "Prohibited: cheats, scripts, and other game-rule violations; "
             "changing account details; griefing and toxic behavior.\n\n"

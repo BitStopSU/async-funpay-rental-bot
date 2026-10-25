@@ -31,9 +31,9 @@ or email codes, account sign-in, and password changes are not supported; these
 tasks require manual handling.
 
 Если FunPay отклоняет cookie как устаревшую, бот обновляет данные сессии и
-повторяет запрос один раз. Если ошибка повторяется, проверьте `FUNPAY_GOLDEN_KEY`
-и войдите в FunPay заново, чтобы получить актуальный ключ.
+повторяет запрос один раз, не чаще раза в минуту. Если ошибка сохраняется,
+проверьте `FUNPAY_GOLDEN_KEY` и войдите в FunPay заново, чтобы получить актуальный ключ.
 
 If FunPay rejects a session cookie as stale, the bot refreshes its session data
-and retries the request once. If the error persists, check `FUNPAY_GOLDEN_KEY`
-and sign in to FunPay again to obtain a fresh key.
+and retries the request once, at most once per minute. If the error persists,
+check `FUNPAY_GOLDEN_KEY` and sign in to FunPay again to obtain a fresh key.

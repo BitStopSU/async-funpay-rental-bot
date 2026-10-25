@@ -30,10 +30,13 @@ Do not put secrets in this file or in version control. Automated access to Steam
 or email codes, account sign-in, and password changes are not supported; these
 tasks require manual handling.
 
-Если FunPay отклоняет cookie как устаревшую, бот обновляет данные сессии и
-повторяет запрос один раз, не чаще раза в минуту. Если ошибка сохраняется,
+Бот сохраняет `PHPSESSID` и дополнительную cookie `golden_seal`, которую FunPay
+выдаёт при авторизации. Если FunPay отклоняет cookie как устаревшую, бот обновляет
+данные сессии и повторяет запрос один раз, не чаще раза в минуту. Если ошибка сохраняется,
 проверьте `FUNPAY_GOLDEN_KEY` и войдите в FunPay заново, чтобы получить актуальный ключ.
 
-If FunPay rejects a session cookie as stale, the bot refreshes its session data
-and retries the request once, at most once per minute. If the error persists,
+The bot preserves both `PHPSESSID` and the additional `golden_seal` cookie set by
+FunPay during authentication. If FunPay rejects a session cookie as stale, the
+bot refreshes its session data and retries the request once, at most once per
+minute. If the error persists,
 check `FUNPAY_GOLDEN_KEY` and sign in to FunPay again to obtain a fresh key.

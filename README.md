@@ -62,3 +62,21 @@ unique title, hourly price, and local account ID. Never put credentials or
 Steam Guard codes in a listing. Paid orders reserve only the linked account,
 but fulfillment remains manual; the bot does not sign in to Steam or disclose
 secrets.
+
+## Telegram admin menu / Меню администратора
+
+Укажите `TG_BOT_TOKEN` и числовой Telegram user ID в `TG_ADMIN_ID`, затем
+перезапустите `python main.py` и отправьте боту команду `/start` в личном чате.
+Inline-меню показывает состояние базы, аккаунты, активные аренды, объявления и
+настроенные параметры (секреты не отображаются). Доступ разрешён только ID из
+`TG_ADMIN_ID`. Для добавления аккаунта меню направляет к локальной команде
+`python add_account.py`: пароль и shared secret нельзя передавать Telegram.
+
+Set `TG_BOT_TOKEN` and your numeric Telegram user ID in `TG_ADMIN_ID`, restart
+`python main.py`, and send `/start` to the bot in a private chat. The inline
+menu shows database status, accounts, active rentals, listings, and whether
+settings are configured without revealing secret values. Only the configured
+admin ID is accepted. Account credentials must be entered locally with
+`python add_account.py`, not sent through Telegram. Telegram long polling
+requires that the same bot token is not already being polled by another process
+and that no webhook is configured.

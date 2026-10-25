@@ -318,6 +318,63 @@ class Database:
                 details={"lot_id": str(lot_id).strip()},
             )
 
+    def get_admin_status(self) -> dict[str, int]:
+        account_rows = self.conn.execute(
+            "SELECT status, COUNT(*) AS count FROM accounts GROUP BY status"
+        ).fetchall()
+        status = {row["status"]: row["count"] for row in account_rows}
+        return {
+            "accounts_total": sum(status.values()),
+            "accounts_free": status.get("free", 0),
+            "accounts_rented": status.get("rented", 0),
+            "accounts_maintenance": status.get("maintenance", 0),
+            "accounts_banned": status.get("banned", 0),
+            "vac_banned": self.conn.execute(
+                "SELECT COUNT(*) FROM accounts WHERE vac_banned = 1"
+            ).fetchone()[0],
+            "active_rentals": self.conn.execute(
+                "SELECT COUNT(*) FROM rentals WHERE status = 'active'"
+            ).fetchone()[0],
+            "expired_unreleased": self.conn.execute(
+                """SELECT COUNT(*) FROM rentals
+                   WHERE status = 'active' AND ends_at <= ?""",
+                (current_time().isoformat(),),
+            ).fetchone()[0],
+            "lots_total": self.conn.execute(
+                "SELECT COUNT(*) FROM lots"
+            ).fetchone()[0],
+            "unlinked_accounts": self.conn.execute(
+                """SELECT COUNT(*) FROM accounts
+                   WHERE NOT EXISTS (
+                       SELECT 1 FROM lots WHERE lots.account_id = accounts.account_id
+                   )"""
+            ).fetchone()[0],
+            "manual_tasks": self.conn.execute(
+                "SELECT COUNT(*) FROM password_tasks WHERE status IN ('pending', 'notified')"
+            ).fetchone()[0],
+        }
+
+    def get_admin_accounts(self):
+        return self.conn.execute(
+            """SELECT accounts.account_id, accounts.status, accounts.mmr,
+                      accounts.vac_banned, lots.lot_id
+               FROM accounts LEFT JOIN lots USING (account_id)
+               ORDER BY accounts.account_id"""
+        ).fetchall()
+
+    def get_admin_lots(self):
+        return self.conn.execute(
+            """SELECT lot_id, title, price_per_hour, is_extension, account_id
+               FROM lots ORDER BY lot_id"""
+        ).fetchall()
+
+    def get_admin_active_rentals(self):
+        return self.conn.execute(
+            """SELECT order_id, buyer_nick, account_id, ends_at, lot_id
+               FROM rentals WHERE status = 'active'
+               ORDER BY ends_at"""
+        ).fetchall()
+
     def create_rental(
         self, order_id, user_id, account_id, lot_id, quantity, buyer_nick,
         chat_id=None,

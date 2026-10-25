@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from admin_menu import admin_menu_loop
 from config import Config
 from daily_checks import daily_checks
 from database import Database
@@ -20,6 +21,7 @@ async def main():
         asyncio.create_task(daily_checks(db), name="daily-account-checks"),
         asyncio.create_task(password_worker(db), name="manual-password-tasks"),
         asyncio.create_task(digest_loop(db), name="notification-digest"),
+        asyncio.create_task(admin_menu_loop(db), name="telegram-admin-menu"),
     ]
     try:
         await bot.start()

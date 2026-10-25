@@ -115,6 +115,75 @@ _MESSAGES = {
             "связанный аккаунт."
         ),
         "cli_lot_failed": "Не удалось зарегистрировать объявление: {error}",
+        "admin_menu_title": "Панель управления арендой",
+        "admin_menu_status": "📊 Статус",
+        "admin_menu_accounts": "👥 Аккаунты",
+        "admin_menu_rentals": "🕒 Активные аренды",
+        "admin_menu_lots": "🛍 Объявления",
+        "admin_menu_add_account": "➕ Добавить аккаунт",
+        "admin_menu_settings": "⚙️ Настройки",
+        "admin_menu_open": "Откройте раздел:",
+        "admin_menu_unauthorized": "Это меню доступно только администратору.",
+        "admin_menu_status_text": (
+            "Статус базы:\n"
+            "Аккаунты всего: {accounts_total}\n"
+            "Свободно: {accounts_free}\n"
+            "В аренде: {accounts_rented}\n"
+            "Обслуживание: {accounts_maintenance}\n"
+            "Заблокировано: {accounts_banned}\n"
+            "VAC-ban: {vac_banned}\n"
+            "Активные аренды: {active_rentals}\n"
+            "Истекли, ожидают обработки: {expired_unreleased}\n"
+            "Объявления: {lots_total} (без привязки: {unlinked_accounts})\n"
+            "Ручные задачи: {manual_tasks}"
+        ),
+        "admin_menu_accounts_empty": "Аккаунтов пока нет.",
+        "admin_menu_account_row": (
+            "№{account_id} — {status}; MMR: {mmr}; VAC: {vac}; лот: {lot}"
+        ),
+        "admin_menu_vac_yes": "бан",
+        "admin_menu_vac_no": "нет",
+        "admin_menu_no_lot": "не привязан",
+        "admin_menu_rentals_empty": "Активных аренд нет.",
+        "admin_menu_rental_row": (
+            "Заказ №{order_id}; покупатель: {buyer}; аккаунт №{account_id}; "
+            "лот: {lot_id}; до: {ends_at}"
+        ),
+        "admin_menu_lots_empty": "Объявления ещё не привязаны.",
+        "admin_menu_lot_row": (
+            "Лот {lot_id}: {title}; {price}/час; аккаунт: {account}"
+        ),
+        "admin_menu_add_account_text": (
+            "Секреты нельзя безопасно вводить в Telegram. На компьютере, где "
+            "находится база бота, выполните `python add_account.py`. Пароль и "
+            "shared secret вводятся скрыто и сохраняются зашифрованными. "
+            "Затем создайте объявление вручную в FunPay и привяжите его через "
+            "`python register_lot.py`."
+        ),
+        "admin_menu_settings_text": (
+            "Настройки (значения секретов скрыты):\n"
+            "FunPay: {funpay}\nTelegram-уведомления: {telegram}\n"
+            "Ключ шифрования: {encryption}\nSteam API: {steam_api}\n"
+            "База: {db_path}\nЯзык: {language}\n\n"
+            "Чтобы изменить параметры, отредактируйте `.env` на компьютере "
+            "с ботом и перезапустите процесс."
+        ),
+        "admin_menu_configured": "настроено",
+        "admin_menu_missing": "не настроено",
+        "admin_menu_back": "↩️ В меню",
+        "admin_status_free": "свободен",
+        "admin_status_rented": "в аренде",
+        "admin_status_banned": "заблокирован",
+        "admin_status_maintenance": "обслуживание",
+        "admin_menu_not_configured": (
+            "Админ-меню не запущено: задайте TG_BOT_TOKEN и числовой TG_ADMIN_ID."
+        ),
+        "admin_menu_poll_conflict": (
+            "Telegram не разрешил получать обновления. Убедитесь, что этот токен "
+            "не используется другим long-polling процессом и для бота не настроен webhook."
+        ),
+        "admin_menu_poll_failed": "Ошибка Telegram admin-меню (%s)",
+        "admin_menu_api_failed": "Telegram API отклонил запрос: {method}",
     },
     "en": {
         "order_already_registered": "This order has already been registered.",
@@ -217,6 +286,75 @@ _MESSAGES = {
             "its linked account."
         ),
         "cli_lot_failed": "Could not register listing: {error}",
+        "admin_menu_title": "Rental management",
+        "admin_menu_status": "📊 Status",
+        "admin_menu_accounts": "👥 Accounts",
+        "admin_menu_rentals": "🕒 Active rentals",
+        "admin_menu_lots": "🛍 Listings",
+        "admin_menu_add_account": "➕ Add account",
+        "admin_menu_settings": "⚙️ Settings",
+        "admin_menu_open": "Choose a section:",
+        "admin_menu_unauthorized": "This menu is available to the administrator only.",
+        "admin_menu_status_text": (
+            "Database status:\n"
+            "Accounts total: {accounts_total}\n"
+            "Free: {accounts_free}\n"
+            "Rented: {accounts_rented}\n"
+            "Maintenance: {accounts_maintenance}\n"
+            "Banned: {accounts_banned}\n"
+            "VAC-banned: {vac_banned}\n"
+            "Active rentals: {active_rentals}\n"
+            "Expired, awaiting processing: {expired_unreleased}\n"
+            "Listings: {lots_total} (unlinked accounts: {unlinked_accounts})\n"
+            "Manual tasks: {manual_tasks}"
+        ),
+        "admin_menu_accounts_empty": "No accounts have been added.",
+        "admin_menu_account_row": (
+            "#{account_id} — {status}; MMR: {mmr}; VAC: {vac}; listing: {lot}"
+        ),
+        "admin_menu_vac_yes": "banned",
+        "admin_menu_vac_no": "no",
+        "admin_menu_no_lot": "not linked",
+        "admin_menu_rentals_empty": "No active rentals.",
+        "admin_menu_rental_row": (
+            "Order #{order_id}; buyer: {buyer}; account #{account_id}; "
+            "listing: {lot_id}; until: {ends_at}"
+        ),
+        "admin_menu_lots_empty": "No listings have been linked yet.",
+        "admin_menu_lot_row": (
+            "Listing {lot_id}: {title}; {price}/hour; account: {account}"
+        ),
+        "admin_menu_add_account_text": (
+            "Secrets cannot be safely entered through Telegram. On the computer "
+            "hosting the bot database, run `python add_account.py`. Password and "
+            "shared secret are hidden during input and stored encrypted. Then "
+            "create the listing manually on FunPay and link it with "
+            "`python register_lot.py`."
+        ),
+        "admin_menu_settings_text": (
+            "Settings (secret values are hidden):\n"
+            "FunPay: {funpay}\nTelegram notifications: {telegram}\n"
+            "Encryption key: {encryption}\nSteam API: {steam_api}\n"
+            "Database: {db_path}\nLanguage: {language}\n\n"
+            "To change settings, edit `.env` on the bot computer and restart "
+            "the process."
+        ),
+        "admin_menu_configured": "configured",
+        "admin_menu_missing": "not configured",
+        "admin_menu_back": "↩️ Menu",
+        "admin_status_free": "free",
+        "admin_status_rented": "rented",
+        "admin_status_banned": "banned",
+        "admin_status_maintenance": "maintenance",
+        "admin_menu_not_configured": (
+            "Admin menu is inactive: configure TG_BOT_TOKEN and numeric TG_ADMIN_ID."
+        ),
+        "admin_menu_poll_conflict": (
+            "Telegram updates could not be polled. Make sure this token is not used "
+            "by another long-polling process and no webhook is configured."
+        ),
+        "admin_menu_poll_failed": "Telegram admin menu polling failed (%s)",
+        "admin_menu_api_failed": "Telegram API rejected request: {method}",
     },
 }
 

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import math
 import sqlite3
 from typing import Any
 
@@ -57,6 +58,16 @@ def _main_keyboard() -> dict[str, Any]:
                 {
                     "text": tr("admin_menu_sync_listings"),
                     "callback_data": "admin:sync_listings",
+                },
+            ],
+            [
+                {
+                    "text": tr("admin_menu_edit_account"),
+                    "callback_data": "admin:edit_account",
+                },
+                {
+                    "text": tr("admin_menu_edit_lot_price"),
+                    "callback_data": "admin:edit_lot_price",
                 },
             ],
         ]
@@ -136,6 +147,41 @@ def _account_keyboard(accounts, callback_prefix: str) -> dict[str, Any]:
     return {
         "inline_keyboard": [
             buttons[index:index + 2] for index in range(0, len(buttons), 2)
+        ] + [[{"text": tr("admin_menu_back"), "callback_data": "admin:menu"}]]
+    }
+
+
+def _lot_keyboard(lots) -> dict[str, Any]:
+    buttons = [
+        {
+            "text": f"{lot['lot_id']} · {lot['price_per_hour']}/h",
+            "callback_data": f"admin:lot_price:{lot['lot_id']}",
+        }
+        for lot in lots
+    ]
+    return {
+        "inline_keyboard": [
+            buttons[index:index + 2] for index in range(0, len(buttons), 2)
+        ] + [[{"text": tr("admin_menu_back"), "callback_data": "admin:menu"}]]
+    }
+
+
+def _account_fields_keyboard(account_id: int) -> dict[str, Any]:
+    fields = (
+        ("steamid64", "admin_menu_field_steamid64"),
+        ("dota_account_id", "admin_menu_field_dota_id"),
+        ("mmr", "admin_menu_field_mmr"),
+        ("behavior_score", "admin_menu_field_behavior"),
+    )
+    return {
+        "inline_keyboard": [
+            [
+                {
+                    "text": tr(label),
+                    "callback_data": f"admin:account_field:{account_id}:{field}",
+                }
+            ]
+            for field, label in fields
         ] + [[{"text": tr("admin_menu_back"), "callback_data": "admin:menu"}]]
     }
 
@@ -230,6 +276,14 @@ async def _show_section(
         text = _status_text(db)
     elif section == "accounts":
         text = _accounts_text(db)
+        accounts = db.get_admin_editable_accounts()
+        if accounts:
+            await _send_text(
+                client,
+                text + "\n\n" + tr("admin_menu_edit_account_choose"),
+                _account_keyboard(accounts, "account_edit"),
+            )
+            return
     elif section == "rentals":
         text = _rentals_text(db)
     elif section == "lots":
@@ -267,6 +321,32 @@ async def _show_section(
         )
         return
     elif section == "sync_listings":
+        return
+    elif section == "edit_account":
+        accounts = db.get_admin_editable_accounts()
+        if not accounts:
+            await _send_text(
+                client, tr("admin_menu_accounts_empty"), _back_keyboard()
+            )
+            return
+        await _send_text(
+            client,
+            tr("admin_menu_edit_account_choose"),
+            _account_keyboard(accounts, "account_edit"),
+        )
+        return
+    elif section == "edit_lot_price":
+        lots = db.get_admin_lots()
+        if not lots:
+            await _send_text(
+                client, tr("admin_menu_lots_empty"), _back_keyboard()
+            )
+            return
+        await _send_text(
+            client,
+            tr("admin_menu_edit_lot_price_choose"),
+            _lot_keyboard(lots),
+        )
         return
     else:
         await _show_menu(client)
@@ -375,6 +455,83 @@ async def _handle_update(
                 await _send_text(
                     client, tr("admin_menu_operation_failed_text"), _back_keyboard()
                 )
+        elif pending.get("action") == "account_field":
+            account_id = pending["account_id"]
+            field = pending["field"]
+            if not text.isdecimal():
+                await _send_text(client, tr("admin_menu_field_invalid"))
+                return
+            try:
+                if field == "mmr":
+                    value = int(text)
+                    if value > 15000:
+                        raise ValueError("MMR is out of range")
+                    db.update_mmr(account_id, value)
+                else:
+                    db.update_account_public_field(account_id, field, text)
+                pending.clear()
+                synced = False
+                if field in {"mmr", "behavior_score"} and bot:
+                    synced = await bot.sync_account_listing(account_id)
+                await _send_text(
+                    client,
+                    tr(
+                        "admin_menu_field_saved_synced"
+                        if synced
+                        else "admin_menu_field_saved"
+                    ),
+                    _back_keyboard(),
+                )
+            except (ValueError, sqlite3.Error) as exc:
+                logger.warning(
+                    tr("admin_menu_operation_failed"), type(exc).__name__
+                )
+                await _send_text(client, tr("admin_menu_field_invalid"))
+            except (
+                aiohttp.ClientError,
+                exceptions.RequestFailedError,
+                exceptions.UnauthorizedError,
+                exceptions.LotSavingError,
+            ) as exc:
+                pending.clear()
+                logger.error(
+                    tr("admin_menu_operation_failed"), type(exc).__name__
+                )
+                await _send_text(
+                    client,
+                    tr("admin_menu_field_saved_pending"),
+                    _back_keyboard(),
+                )
+        elif pending.get("action") == "lot_price":
+            try:
+                price = float(text.replace(",", "."))
+                if not math.isfinite(price) or not 0 < price <= 100000:
+                    raise ValueError("Price out of range")
+                lot_id = pending["lot_id"]
+                if not bot:
+                    raise ValueError("FunPay bot is unavailable")
+                await bot.update_listing_price(lot_id, price)
+                pending.clear()
+                await _send_text(
+                    client,
+                    tr("admin_menu_price_saved", lot_id=lot_id, price=f"{price:g}"),
+                    _back_keyboard(),
+                )
+            except (
+                ValueError,
+                aiohttp.ClientError,
+                exceptions.RequestFailedError,
+                exceptions.UnauthorizedError,
+                exceptions.LotSavingError,
+                sqlite3.Error,
+            ) as exc:
+                logger.error(
+                    tr("admin_menu_operation_failed"), type(exc).__name__
+                )
+                pending.clear()
+                await _send_text(
+                    client, tr("admin_menu_operation_failed_text"), _back_keyboard()
+                )
         elif pending.get("action") == "dota_id":
             if not text.isdecimal():
                 await _send_text(client, tr("cli_add_dota_invalid"))
@@ -478,6 +635,69 @@ async def _handle_update(
             await _send_text(
                 client, tr("admin_menu_operation_failed_text"), _back_keyboard()
             )
+    elif section.startswith("account_edit:"):
+        try:
+            account_id = int(section.split(":", maxsplit=1)[1])
+            account = db.get_account_listing_data(account_id)
+            if not account:
+                raise ValueError("Account does not exist")
+            await _send_text(
+                client,
+                tr(
+                    "admin_menu_edit_account_fields",
+                    account_id=account_id,
+                    steamid=account["steamid64"] or "—",
+                    dota_id=account["dota_account_id"] or "—",
+                    mmr=account["mmr"] if account["mmr"] is not None else "—",
+                    behavior=(
+                        account["behavior_score"]
+                        if account["behavior_score"] is not None
+                        else "—"
+                    ),
+                ),
+                _account_fields_keyboard(account_id),
+            )
+        except (ValueError, sqlite3.Error):
+            await _send_text(
+                client, tr("admin_menu_operation_failed_text"), _back_keyboard()
+            )
+    elif section.startswith("account_field:"):
+        try:
+            _, account_id, field = section.split(":", maxsplit=2)
+            account_id = int(account_id)
+            if field not in {"steamid64", "dota_account_id", "mmr", "behavior_score"}:
+                raise ValueError("Unsupported account field")
+            if not db.get_account_listing_data(account_id):
+                raise ValueError("Account does not exist")
+            pending.update(
+                action="account_field",
+                account_id=account_id,
+                field=field,
+            )
+            await _send_text(
+                client,
+                tr(
+                    "admin_menu_field_enter",
+                    field=tr(f"admin_menu_field_{field}"),
+                    account_id=account_id,
+                ),
+                _back_keyboard(),
+            )
+        except (ValueError, sqlite3.Error):
+            await _send_text(
+                client, tr("admin_menu_operation_failed_text"), _back_keyboard()
+            )
+    elif section.startswith("lot_price:"):
+        lot_id = section.split(":", maxsplit=1)[1]
+        if not db.get_lot(lot_id):
+            await _send_text(
+                client, tr("admin_menu_operation_failed_text"), _back_keyboard()
+            )
+            return
+        pending.update(action="lot_price", lot_id=lot_id)
+        await _send_text(
+            client, tr("admin_menu_price_enter", lot_id=lot_id), _back_keyboard()
+        )
     elif section == "sync_listings":
         if not bot:
             await _send_text(

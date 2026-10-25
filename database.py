@@ -244,11 +244,56 @@ class Database:
 
     def get_account_listing_data(self, account_id: int):
         return self.conn.execute(
-            """SELECT account_id, dota_account_id, mmr, behavior_score,
-                      status, vac_banned
+            """SELECT account_id, steamid64, dota_account_id, mmr,
+                      behavior_score, status, vac_banned
                FROM accounts WHERE account_id = ?""",
             (account_id,),
         ).fetchone()
+
+    def get_admin_editable_accounts(self):
+        return self.conn.execute(
+            """SELECT account_id, steamid64, dota_account_id, mmr,
+                      behavior_score, status, vac_banned
+               FROM accounts ORDER BY account_id"""
+        ).fetchall()
+
+    def update_account_public_field(
+        self, account_id: int, field: str, value: str | int
+    ):
+        columns = {
+            "steamid64": "steamid64",
+            "dota_account_id": "dota_account_id",
+            "mmr": "mmr",
+            "behavior_score": "behavior_score",
+        }
+        if field not in columns:
+            raise ValueError("Unsupported account field")
+        if field in {"steamid64", "dota_account_id"}:
+            normalized = str(value).strip()
+            if not normalized.isdecimal():
+                raise ValueError("Account IDs must contain digits only")
+            if field == "steamid64" and len(normalized) != 17:
+                raise ValueError("SteamID64 must contain 17 digits")
+        else:
+            if isinstance(value, bool) or not str(value).isdecimal():
+                raise ValueError("Value must be a non-negative integer")
+            normalized = int(value)
+            max_value = 12000 if field == "behavior_score" else 15000
+            if normalized > max_value:
+                raise ValueError(f"{field} exceeds its supported range")
+        with self.conn:
+            cursor = self.conn.execute(
+                f"UPDATE accounts SET {columns[field]} = ? WHERE account_id = ?",
+                (normalized, account_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Account does not exist")
+            self.log(
+                f"account_{field}_updated",
+                account_id=account_id,
+                details={"value": normalized},
+            )
+        return normalized
 
     def start_screenshot_submission(
         self,
@@ -499,6 +544,27 @@ class Database:
             self.log(
                 "listing_titles_synchronized",
                 details={"lot_id": str(lot_id)},
+            )
+
+    def update_lot_price(self, lot_id: str, price_per_hour: float):
+        price = float(price_per_hour)
+        if not math.isfinite(price) or price <= 0:
+            raise ValueError("Hourly price must be a positive finite number")
+        with self.conn:
+            cursor = self.conn.execute(
+                "UPDATE lots SET price_per_hour = ? WHERE lot_id = ?",
+                (price, str(lot_id)),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Lot does not exist")
+            row = self.conn.execute(
+                "SELECT account_id FROM lots WHERE lot_id = ?",
+                (str(lot_id),),
+            ).fetchone()
+            self.log(
+                "listing_price_updated",
+                account_id=row["account_id"],
+                details={"lot_id": str(lot_id), "price_per_hour": price},
             )
 
     def get_admin_status(self) -> dict[str, int]:

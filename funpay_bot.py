@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import sqlite3
 from datetime import datetime
 from urllib.parse import urlsplit
@@ -137,6 +138,23 @@ class RentalBot:
         )
         await self._sync_listing(lot_id, account_id)
         return lot_id
+
+    async def update_listing_price(self, lot_id: str, price: float):
+        if not self._ready.is_set():
+            raise ValueError(tr("admin_menu_funpay_unavailable"))
+        price = float(price)
+        if not math.isfinite(price) or price <= 0:
+            raise ValueError(tr("cli_lot_invalid"))
+        lot = self.db.get_lot(lot_id)
+        if not lot:
+            raise ValueError(tr("cli_lot_fetch_failed"))
+        fields = await self.acc.get_lot_fields(int(lot_id))
+        fields.edit_fields({"price": f"{price:g}"})
+        await self.acc.save_lot(fields)
+        self.db.update_lot_price(lot_id, price)
+        if lot["account_id"] is None or lot["is_extension"]:
+            return False
+        return await self._sync_listing(lot_id, lot["account_id"])
 
     async def sync_account_listing(self, account_id: int):
         if not self._ready.is_set():

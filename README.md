@@ -50,16 +50,16 @@ check `FUNPAY_GOLDEN_KEY` and sign in to FunPay again to obtain a fresh key.
    secret вводятся скрыто и шифруются Fernet; автоматического входа в Steam нет.
    Введите ID уже созданного лота — бот сам получит из FunPay его название и
    цену и привяжет его к новому аккаунту.
-3. Для привязки лота к ранее добавленному аккаунту выполните
-   `python register_lot.py`: введите ID лота и выберите аккаунт из списка.
-   Вручную вводить название, цену или локальный ID при добавлении нового
-   аккаунта не нужно.
+3. Для привязки лота к ранее добавленному аккаунту используйте в Telegram
+   «Привязать лот»: отправьте ID существующего объявления и выберите аккаунт.
+   Либо выполните `python register_lot.py` локально. Вручную вводить название
+   и цену при привязке не нужно.
 4. После привязки бот синхронизирует заголовок и описание при запуске и после
-   изменения MMR в ежедневной проверке OpenDota. Цена и остальные поля лота
-   не меняются. Порядочность подставляется из базы, но автоматически не
-   проверяется: источник её изменения не подключён. После
-   ручной проверки нового значения запустите `python update_behavior.py` —
-   бот сохранит его и обновит текст привязанного лота.
+   изменения MMR в ежедневной проверке OpenDota. Автоматически цена не
+   меняется, но администратор может изменить её в Telegram. Порядочность
+   подставляется из базы, но автоматически не проверяется: источник её
+   изменения не подключён. Её можно обновить в Telegram после ручной проверки
+   или запустить `python update_behavior.py`.
 5. `python prepare_listing.py` оставлен как предпросмотр. Не указывайте в лоте
    логин, пароль, Steam Guard secret или коды. Заказы резервируют только
    связанный аккаунт; обработка заказа остаётся ручной.
@@ -69,13 +69,14 @@ listings but does not support creating them). Run `python add_account.py`, confi
 manual verification, enter the Dota account ID for automatic MMR checks, and
 provide the existing listing ID. The bot fetches the title and price from FunPay
 and links the listing to the new account; credentials remain hidden and encrypted.
-For an account already in the database, run `python register_lot.py`, enter the
-listing ID, and choose the account from the list. After linking, the bot updates
+For an account already in the database, use Telegram's “Link listing” menu to
+send the listing ID and choose the account, or run `python register_lot.py`
+locally. After linking, the bot updates
 the listing title and description on startup and when the daily OpenDota check
-changes MMR. It does not change the price or other listing fields. Behavior score
-is included from the database but has no automatic data source; after manually
-verifying a new score, run `python update_behavior.py` to save it and refresh the
-linked listing.
+changes MMR. The bot does not automatically change the price, but an admin can
+change it in Telegram. Behavior score is included from the database but has no
+automatic data source; update it from Telegram after manual verification or run
+`python update_behavior.py`.
 `python prepare_listing.py` remains a preview. Never put credentials or Steam
 Guard codes in a listing; order fulfillment remains manual.
 
@@ -86,8 +87,9 @@ Guard codes in a listing; order fulfillment remains manual.
 Inline-меню показывает состояние базы, аккаунты, активные аренды, объявления и
 настроенные параметры (секреты не отображаются). Доступ разрешён только ID из
 `TG_ADMIN_ID`. Через меню можно привязать существующий FunPay-лот к выбранному
-свободному аккаунту, изменить вручную проверенную порядочность и запустить
-синхронизацию объявлений. ID лота, его название и цена получаются из FunPay;
+свободному аккаунту, изменить SteamID64, Dota ID, MMR и вручную проверенную
+порядочность, изменить цену существующего лота и запустить синхронизацию
+объявлений. ID лота, его название и первоначальная цена получаются из FunPay;
 автоматически меняются только заголовок и описание. Новые MMR синхронизируются
 из OpenDota ежедневно. Новые лоты создаются на FunPay вручную один раз.
 
@@ -100,10 +102,11 @@ Set `TG_BOT_TOKEN` and your numeric Telegram user ID in `TG_ADMIN_ID`, restart
 `python main.py`, and send `/start` to the bot in a private chat. The inline
 menu shows database status, accounts, active rentals, listings, and whether
 settings are configured without revealing secret values. Only the configured
-admin ID is accepted. You can link a FunPay listing to a free account, update a
-manually verified behavior score, and sync listing text from this menu. Lot IDs,
-titles, and prices are read from FunPay; only listing title and description are
-automatically changed. New MMR values sync daily from OpenDota. New listings
+admin ID is accepted. You can link a FunPay listing to a free account, edit
+non-secret account fields (SteamID64, Dota ID, MMR, and manually verified behavior
+score), change an existing listing's price, and sync listing text from this menu.
+Lot IDs, titles, and initial prices are read from FunPay; only listing title and
+description are changed automatically. New MMR values sync daily from OpenDota. New listings
 must still be created manually once. New account passwords and shared secrets
 must be entered locally with `python add_account.py` using hidden input, never
 sent through Telegram. Telegram long polling

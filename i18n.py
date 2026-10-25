@@ -290,6 +290,8 @@ _MESSAGES = {
         "admin_menu_link_lot": "🔗 Привязать лот",
         "admin_menu_update_behavior": "🤝 Обновить порядочность",
         "admin_menu_sync_listings": "🔄 Обновить лоты",
+        "admin_menu_edit_account": "✏️ Данные аккаунта",
+        "admin_menu_edit_lot_price": "💰 Цена лота",
         "admin_menu_open": "Откройте раздел:",
         "admin_menu_unauthorized": "Это меню доступно только администратору.",
         "admin_menu_status_text": (
@@ -325,8 +327,9 @@ _MESSAGES = {
             "Секреты нельзя безопасно вводить в Telegram. На компьютере, где "
             "находится база бота, выполните `python add_account.py`. Пароль и "
             "shared secret вводятся скрыто и сохраняются зашифрованными. "
-            "Создайте лот в FunPay один раз; затем здесь выберите «Привязать "
-            "лот». Повторно запускать register_lot.py не нужно."
+            "После добавления несекретные поля аккаунта и привязку лота можно "
+            "менять здесь. Создайте лот в FunPay один раз; затем выберите "
+            "«Привязать лот»."
         ),
         "admin_menu_listing_text": (
             "Текущие значения MMR/порядочности и связанные лоты:\n"
@@ -390,6 +393,49 @@ _MESSAGES = {
         ),
         "admin_menu_listing_stats": (
             "Лот {lot_id}; аккаунт #{account_id}; MMR: {mmr}; порядочность: {behavior}"
+        ),
+        "admin_menu_edit_account_choose": (
+            "Выберите аккаунт для изменения несекретных полей:"
+        ),
+        "admin_menu_edit_account_fields": (
+            "Данные аккаунта #{account_id}: SteamID64 {steamid}; Dota ID {dota_id}; "
+            "MMR {mmr}; порядочность {behavior}.\n"
+            "Выберите поле для изменения. Пароли и shared secret здесь не "
+            "показываются и не редактируются."
+        ),
+        "admin_menu_field_steamid64": "SteamID64",
+        "admin_menu_field_dota_id": "Dota ID",
+        "admin_menu_field_dota_account_id": "Dota ID",
+        "admin_menu_field_mmr": "MMR",
+        "admin_menu_field_behavior": "Порядочность",
+        "admin_menu_field_behavior_score": "Порядочность",
+        "admin_menu_field_enter": (
+            "Введите новое значение «{field}» для аккаунта #{account_id}. "
+            "Для отмены отправьте /cancel."
+        ),
+        "admin_menu_field_invalid": (
+            "Неверное значение. ID должны состоять из цифр; SteamID64 — ровно "
+            "17 цифр, MMR — 0–15000, порядочность — 0–12000."
+        ),
+        "admin_menu_field_saved": (
+            "Данные аккаунта сохранены. Изменения текста лота синхронизируются "
+            "при следующем подключении FunPay."
+        ),
+        "admin_menu_field_saved_synced": (
+            "Данные аккаунта и связанный текст лота обновлены."
+        ),
+        "admin_menu_field_saved_pending": (
+            "Данные сохранены. Связанный текст лота пока не обновился; бот "
+            "повторит синхронизацию после восстановления FunPay."
+        ),
+        "admin_menu_edit_lot_price_choose": "Выберите лот для изменения цены:",
+        "admin_menu_price_enter": (
+            "Введите новую цену лота {lot_id} за единицу в FunPay "
+            "(число больше 0, максимум 100000)."
+        ),
+        "admin_menu_price_saved": (
+            "Цена лота {lot_id} обновлена до {price}. Синхронизация текста "
+            "выполнена, если для неё доступны данные аккаунта и FunPay."
         ),
         "admin_menu_settings_text": (
             "Настройки (значения секретов скрыты):\n"
@@ -681,6 +727,8 @@ _MESSAGES = {
         "admin_menu_link_lot": "🔗 Link listing",
         "admin_menu_update_behavior": "🤝 Update behavior",
         "admin_menu_sync_listings": "🔄 Sync listings",
+        "admin_menu_edit_account": "✏️ Account data",
+        "admin_menu_edit_lot_price": "💰 Listing price",
         "admin_menu_open": "Choose a section:",
         "admin_menu_unauthorized": "This menu is available to the administrator only.",
         "admin_menu_status_text": (
@@ -715,8 +763,9 @@ _MESSAGES = {
         "admin_menu_add_account_text": (
             "Secrets cannot be safely entered through Telegram. On the computer "
             "hosting the bot database, run `python add_account.py`. Password and "
-            "shared secret are hidden during input and stored encrypted. Create "
-            "the FunPay listing once, then use “Link listing” here."
+            "shared secret are hidden during input and stored encrypted. Other "
+            "account fields and listing links can be managed here. Create the "
+            "FunPay listing once, then choose “Link listing”."
         ),
         "admin_menu_listing_text": (
             "Current MMR/behavior values and linked listings:\n"
@@ -724,6 +773,47 @@ _MESSAGES = {
             "MMR is updated through OpenDota; the listing title and description "
             "then sync automatically. Use “Update behavior” to set a manually "
             "verified behavior score."
+        ),
+        "admin_menu_edit_account_choose": (
+            "Choose an account to edit its non-secret fields:"
+        ),
+        "admin_menu_edit_account_fields": (
+            "Account #{account_id}: SteamID64 {steamid}; Dota ID {dota_id}; "
+            "MMR {mmr}; behavior {behavior}.\n"
+            "Choose a field to edit. Passwords and shared secrets are never "
+            "shown or edited here."
+        ),
+        "admin_menu_field_steamid64": "SteamID64",
+        "admin_menu_field_dota_id": "Dota ID",
+        "admin_menu_field_dota_account_id": "Dota ID",
+        "admin_menu_field_mmr": "MMR",
+        "admin_menu_field_behavior": "Behavior score",
+        "admin_menu_field_behavior_score": "Behavior score",
+        "admin_menu_field_enter": (
+            "Enter the new {field} for account #{account_id}. Send /cancel to abort."
+        ),
+        "admin_menu_field_invalid": (
+            "Invalid value. IDs must contain digits; SteamID64 must be 17 digits, "
+            "MMR 0–15000, behavior score 0–12000."
+        ),
+        "admin_menu_field_saved": (
+            "Account data saved. Listing text will sync when FunPay reconnects."
+        ),
+        "admin_menu_field_saved_synced": (
+            "Account data and linked listing text were updated."
+        ),
+        "admin_menu_field_saved_pending": (
+            "Data was saved, but the listing text could not be refreshed. The bot "
+            "will retry after FunPay reconnects."
+        ),
+        "admin_menu_edit_lot_price_choose": "Choose a listing to update its price:",
+        "admin_menu_price_enter": (
+            "Enter the new FunPay price per unit for listing {lot_id} "
+            "(greater than 0, at most 100000)."
+        ),
+        "admin_menu_price_saved": (
+            "Listing {lot_id} price changed to {price}. Text synchronization was "
+            "attempted if account data and FunPay are available."
         ),
         "admin_menu_link_enter_lot": (
             "Send the ID of an existing FunPay listing. Its title and price will "

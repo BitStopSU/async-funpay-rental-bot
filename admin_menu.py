@@ -37,6 +37,12 @@ def _main_keyboard() -> dict[str, Any]:
                     "callback_data": "admin:settings",
                 },
             ],
+            [
+                {
+                    "text": tr("admin_menu_listing_text"),
+                    "callback_data": "admin:listing_text",
+                }
+            ],
         ]
     }
 
@@ -198,6 +204,8 @@ async def _show_section(
         text = _lots_text(db)
     elif section == "add_account":
         text = tr("admin_menu_add_account_text")
+    elif section == "listing_text":
+        text = tr("admin_menu_listing_text")
     elif section == "settings":
         text = _settings_text()
     else:

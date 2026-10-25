@@ -96,10 +96,22 @@ _MESSAGES = {
         "cli_add_login": "Логин Steam: ",
         "cli_add_password": "Пароль Steam (ввод скрыт): ",
         "cli_add_shared_secret": "Shared secret (ввод скрыт): ",
+        "cli_add_verified_prompt": (
+            "Подтверждаете, что вручную проверили данные и имеете право "
+            "добавить этот аккаунт? Введите ДА или YES: "
+        ),
+        "cli_add_verification_required": (
+            "Без ручной проверки аккаунт не добавлен. Автоматический вход в Steam "
+            "не выполнялся."
+        ),
         "cli_add_steamid": "SteamID64 (необязательно): ",
         "cli_add_dota_id": "ID аккаунта Dota (необязательно): ",
         "cli_add_mmr": "Текущий MMR (необязательно): ",
+        "cli_add_behavior": "Порядочность (необязательно): ",
         "cli_add_mmr_invalid": "MMR должен быть целым неотрицательным числом",
+        "cli_add_behavior_invalid": (
+            "Порядочность должна быть целым неотрицательным числом"
+        ),
         "cli_add_success": (
             "Аккаунт добавлен с локальным ID {account_id}. Секреты не отображались."
         ),
@@ -118,12 +130,53 @@ _MESSAGES = {
             "связанный аккаунт."
         ),
         "cli_lot_failed": "Не удалось зарегистрировать объявление: {error}",
+        "cli_preview_account": "Локальный ID аккаунта: ",
+        "cli_preview_price": "Цена за час: ",
+        "cli_preview_missing": (
+            "Аккаунт не найден или сейчас недоступен (не свободен либо есть VAC-ban)."
+        ),
+        "cli_preview_mmr_required": (
+            "Для заголовка укажите MMR при добавлении аккаунта либо обновите его "
+            "в базе после ручной проверки."
+        ),
+        "cli_preview_title": "Заголовок:",
+        "cli_preview_description": "Описание:",
+        "cli_preview_publish_warning": (
+            "Это только предпросмотр: текст автоматически не публикуется. "
+            "Создайте лот вручную в FunPay, затем привяжите его через "
+            "python register_lot.py."
+        ),
+        "cli_preview_failed": "Не удалось подготовить текст: {error}",
+        "listing_title_template": (
+            "🔱【АРЕНДА】🔱【1+ ЧАС】🔱【{mmr} MMR】🔱"
+            "【{behavior} ПОРЯДОЧНОСТЬ】🔱【РЕЙТИНГ】| 1 ЧАС | Dota {mmr}"
+        ),
+        "listing_behavior_unknown": "не указана",
+        "listing_description_template": (
+            "Аренда аккаунта Dota 2 на выбранное количество часов.\n\n"
+            "📊 MMR: {mmr}\n"
+            "🤝 Порядочность: {behavior}\n"
+            "💰 Цена: {price} за час\n"
+            "Значения указаны оператором вручную, могут измениться и не "
+            "проверяются автоматически.\n\n"
+            "⚠️ Выберите нужное количество часов при оплате: например, 1 "
+            "единица — 1 час, 3 единицы — 3 часа.\n"
+            "После покупки заказ обрабатывается оператором вручную. "
+            "Автоматическая выдача данных не поддерживается.\n\n"
+            "Разрешено: менять имя и аватар, играть в доступные режимы.\n\n"
+            "Запрещено: читы, скрипты и другие нарушения правил игры; "
+            "изменение данных аккаунта; порча матчей и токсичное поведение.\n\n"
+            "Доступ предоставляется на срок аренды и не является передачей "
+            "аккаунта в исключительное пользование. Для вопросов по заказу "
+            "обратитесь к оператору.\n"
+        ),
         "admin_menu_title": "Панель управления арендой",
         "admin_menu_status": "📊 Статус",
         "admin_menu_accounts": "👥 Аккаунты",
         "admin_menu_rentals": "🕒 Активные аренды",
         "admin_menu_lots": "🛍 Объявления",
         "admin_menu_add_account": "➕ Добавить аккаунт",
+        "admin_menu_listing_text": "📝 Текст объявления",
         "admin_menu_settings": "⚙️ Настройки",
         "admin_menu_open": "Откройте раздел:",
         "admin_menu_unauthorized": "Это меню доступно только администратору.",
@@ -162,6 +215,11 @@ _MESSAGES = {
             "shared secret вводятся скрыто и сохраняются зашифрованными. "
             "Затем создайте объявление вручную в FunPay и привяжите его через "
             "`python register_lot.py`."
+        ),
+        "admin_menu_listing_text": (
+            "Для предпросмотра заголовка и описания выполните на компьютере "
+            "с базой `python prepare_listing.py`. Используются только вручную "
+            "введённые MMR/порядочность; вход в Steam и публикация не выполняются."
         ),
         "admin_menu_settings_text": (
             "Настройки (значения секретов скрыты):\n"
@@ -272,10 +330,20 @@ _MESSAGES = {
         "cli_add_login": "Steam account login: ",
         "cli_add_password": "Steam password (input hidden): ",
         "cli_add_shared_secret": "Shared secret (input hidden): ",
+        "cli_add_verified_prompt": (
+            "Confirm you manually checked the details and are authorized to add "
+            "this account? Type YES or ДА: "
+        ),
+        "cli_add_verification_required": (
+            "Account was not added without manual verification. No Steam sign-in "
+            "was performed."
+        ),
         "cli_add_steamid": "SteamID64 (optional): ",
         "cli_add_dota_id": "Dota account ID (optional): ",
         "cli_add_mmr": "Current MMR (optional): ",
+        "cli_add_behavior": "Behavior score (optional): ",
         "cli_add_mmr_invalid": "MMR must be a non-negative whole number",
+        "cli_add_behavior_invalid": "Behavior score must be a non-negative whole number",
         "cli_add_success": "Account added with local ID {account_id}. Secrets were not displayed.",
         "cli_add_next": (
             "Create its FunPay listing manually, then run register_lot.py "
@@ -292,12 +360,51 @@ _MESSAGES = {
             "its linked account."
         ),
         "cli_lot_failed": "Could not register listing: {error}",
+        "cli_preview_account": "Local account ID: ",
+        "cli_preview_price": "Hourly price: ",
+        "cli_preview_missing": (
+            "Account not found or unavailable (not free or VAC-banned)."
+        ),
+        "cli_preview_mmr_required": (
+            "Enter MMR when adding the account or update it in the database "
+            "after manual verification."
+        ),
+        "cli_preview_title": "Title:",
+        "cli_preview_description": "Description:",
+        "cli_preview_publish_warning": (
+            "Preview only: this text is not published automatically. Create the "
+            "listing manually on FunPay, then link it with python register_lot.py."
+        ),
+        "cli_preview_failed": "Could not prepare listing text: {error}",
+        "listing_title_template": (
+            "🔱【RENTAL】🔱【1+ HOUR】🔱【{mmr} MMR】🔱"
+            "【{behavior} BEHAVIOR】🔱【RANKED】| 1 HOUR | Dota {mmr}"
+        ),
+        "listing_behavior_unknown": "not provided",
+        "listing_description_template": (
+            "Dota 2 account rental for the number of hours selected.\n\n"
+            "📊 MMR: {mmr}\n"
+            "🤝 Behavior score: {behavior}\n"
+            "💰 Price: {price} per hour\n"
+            "Values are entered manually by the operator, may change, and are "
+            "not automatically verified.\n\n"
+            "⚠️ Select the number of hours when paying: for example, 1 unit is "
+            "1 hour and 3 units are 3 hours.\n"
+            "After purchase, an operator handles the order manually. Automatic "
+            "credential delivery is not supported.\n\n"
+            "Allowed: change name and avatar, play available modes.\n\n"
+            "Prohibited: cheats, scripts, and other game-rule violations; "
+            "changing account details; griefing and toxic behavior.\n\n"
+            "Access is for the rental period and is not an exclusive transfer "
+            "of the account. Contact the operator with order questions.\n"
+        ),
         "admin_menu_title": "Rental management",
         "admin_menu_status": "📊 Status",
         "admin_menu_accounts": "👥 Accounts",
         "admin_menu_rentals": "🕒 Active rentals",
         "admin_menu_lots": "🛍 Listings",
         "admin_menu_add_account": "➕ Add account",
+        "admin_menu_listing_text": "📝 Listing text",
         "admin_menu_settings": "⚙️ Settings",
         "admin_menu_open": "Choose a section:",
         "admin_menu_unauthorized": "This menu is available to the administrator only.",
@@ -336,6 +443,12 @@ _MESSAGES = {
             "shared secret are hidden during input and stored encrypted. Then "
             "create the listing manually on FunPay and link it with "
             "`python register_lot.py`."
+        ),
+        "admin_menu_listing_text": (
+            "To preview the listing title and description, run "
+            "`python prepare_listing.py` on the computer hosting the database. "
+            "Only manually entered MMR/behavior data is used; there is no Steam "
+            "sign-in or publication."
         ),
         "admin_menu_settings_text": (
             "Settings (secret values are hidden):\n"

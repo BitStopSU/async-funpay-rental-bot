@@ -195,15 +195,20 @@ class Database:
         steamid64: str | None = None,
         dota_account_id: str | None = None,
         mmr: int | None = None,
+        behavior_score: int | None = None,
     ) -> int:
         if not login.strip() or not password or not shared_secret:
             raise ValueError("Login, password, and shared secret are required")
+        if mmr is not None and mmr < 0:
+            raise ValueError("MMR must be non-negative")
+        if behavior_score is not None and behavior_score < 0:
+            raise ValueError("Behavior score must be non-negative")
         with self.conn:
             cur = self.conn.execute(
                 """INSERT INTO accounts
                    (login, password_enc, shared_secret_enc, steamid64,
-                    dota_account_id, mmr, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    dota_account_id, mmr, behavior_score, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     login.strip(), self.encrypt(password), self.encrypt(shared_secret),
                     steamid64.strip() if steamid64 and steamid64.strip() else None,
@@ -213,12 +218,20 @@ class Database:
                         else None
                     ),
                     mmr,
+                    behavior_score,
                     current_time().isoformat(),
                 ),
             )
             account_id = cur.lastrowid
             self.log("account_added", account_id=account_id)
             return account_id
+
+    def get_account_listing_data(self, account_id: int):
+        return self.conn.execute(
+            """SELECT account_id, mmr, behavior_score, status, vac_banned
+               FROM accounts WHERE account_id = ?""",
+            (account_id,),
+        ).fetchone()
 
     def set_account_status(self, account_id: int, status: str):
         if status not in {"free", "rented", "banned", "maintenance"}:

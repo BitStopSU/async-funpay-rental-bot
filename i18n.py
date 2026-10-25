@@ -81,6 +81,7 @@ _MESSAGES = {
         "ticker_failed": "Ошибка проверки истёкших аренд (%s)",
         "funpay_started": "Обработчик событий FunPay запущен",
         "funpay_handler_failed": "Ошибка обработки события FunPay (%s)",
+        "funpay_cookie_refresh": "Сессия FunPay отклонена; обновляю данные сессии",
         "daily_vac_failed": "Не удалось проверить VAC-бан в Steam (%s)",
         "daily_mmr_failed": (
             "Не удалось проверить MMR в OpenDota для аккаунта №%s (%s)"
@@ -163,6 +164,7 @@ _MESSAGES = {
         "ticker_failed": "Rental expiry check failed (%s)",
         "funpay_started": "FunPay event listener started",
         "funpay_handler_failed": "FunPay event handler failed (%s)",
+        "funpay_cookie_refresh": "FunPay rejected the session cookie; refreshing session",
         "daily_vac_failed": "Steam VAC check failed (%s)",
         "daily_mmr_failed": "OpenDota MMR check failed for account #%s (%s)",
         "daily_checks_failed": "Daily account checks failed (%s)",

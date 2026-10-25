@@ -4,12 +4,50 @@ import sqlite3
 
 from aioFunPayAPI import Account, Runner
 from aioFunPayAPI.common.enums import EventTypes, OrderStatuses
+from aioFunPayAPI.common.exceptions import RequestFailedError
 
 from database import Database
 from i18n import tr
 from ticker import expiry_ticker
 
 logger = logging.getLogger(__name__)
+SESSION_REFRESH_COOLDOWN = 60
+
+
+class SessionRefreshingRunner(Runner):
+    """Refresh FunPay session data once after a stale-cookie response."""
+
+    def __init__(self, account):
+        super().__init__(account)
+        self._last_session_refresh = 0.0
+
+    async def get_updates(self):
+        try:
+            return await super().get_updates()
+        except RequestFailedError as exc:
+            now = asyncio.get_running_loop().time()
+            if (
+                not _is_stale_cookie_error(exc)
+                or now - self._last_session_refresh < SESSION_REFRESH_COOLDOWN
+            ):
+                raise
+
+            self._last_session_refresh = now
+            logger.warning(tr("funpay_cookie_refresh"))
+            await self.account.get(update_phpsessid=True)
+            return await super().get_updates()
+
+
+def _is_stale_cookie_error(error: RequestFailedError) -> bool:
+    if error.status_code != 400:
+        return False
+    try:
+        message = error.response.json().get("msg", "").casefold()
+    except (AttributeError, TypeError, ValueError):
+        return False
+    return "cookie" in message and (
+        "устарел" in message or "отсутствует" in message
+    )
 
 
 class RentalBot:
@@ -22,8 +60,10 @@ class RentalBot:
     async def start(self):
         if not self.golden_key:
             raise ValueError(tr("funpay_key_missing"))
-        self.acc = await Account(golden_key=self.golden_key).get()
-        self.runner = Runner(self.acc)
+        self.acc = await Account(golden_key=self.golden_key).get(
+            update_phpsessid=True
+        )
+        self.runner = SessionRefreshingRunner(self.acc)
         logger.info(tr("funpay_started"))
         ticker = asyncio.create_task(expiry_ticker(self.db), name="rental-expiry-ticker")
         try:

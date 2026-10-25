@@ -19,6 +19,9 @@ used when the setting is omitted.
 `python -m pip install -r requirements.txt`, скопировать `.env.example` в
 `.env` и запустить `python main.py`. Создавайте карточки аккаунтов в Telegram:
 бот принимает только Dota ID и необязательные публичные игровые показатели.
+Локальные офлайн-проверки запускаются командой
+`python -m unittest discover -s tests -v`; они используют временные базы данных
+и поддельные ответы внешних API.
 
 Python 3.10 or newer is required. Run `start.bat` from the program folder: it
 creates a virtual environment, installs dependencies, and opens `.env.example`
@@ -27,6 +30,8 @@ in the launcher window. To start manually, install dependencies with
 `python -m pip install -r requirements.txt`, copy `.env.example` to `.env`, and
 run `python main.py`. Create account records in Telegram; the bot accepts only a
 Dota ID and optional public game statistics.
+Run offline tests with `python -m unittest discover -s tests -v`; they use
+temporary databases and mocked external API responses.
 
 ## Windows installer
 
@@ -117,6 +122,20 @@ automatic data source; update it from Telegram after manual verification or run
 `python update_behavior.py`.
 `python prepare_listing.py` remains a preview. Never put credentials or Steam
 Guard codes in a listing; order fulfillment remains manual.
+
+## Rental timing / Срок аренды
+
+Новая аренда длится оплаченные часы плюс один 30-минутный буфер. Продление
+добавляет только оплаченные часы к текущему `ends_at`, без повторного буфера и
+без смены пароля. Если оплата продления пришла после срока, но до того, как
+ticker успел освободить аренду, оплаченные часы считаются с момента продления;
+это не позволяет новой аренде сразу истечь.
+
+A new rental lasts the paid hours plus one 30-minute buffer. An extension adds
+only the purchased hours to the current `ends_at`, with no second buffer and no
+password changes. If an extension is paid after the end time but before the
+ticker releases the rental, its purchased time starts at the extension time so
+the rental does not expire immediately.
 
 ## Telegram admin menu / Меню администратора
 

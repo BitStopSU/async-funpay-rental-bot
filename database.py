@@ -748,7 +748,8 @@ class Database:
                 (str(extension_order_id),),
             ).fetchone():
                 return datetime.fromisoformat(rental["ends_at"])
-            new_ends = datetime.fromisoformat(rental["ends_at"]) + timedelta(
+            current_end = datetime.fromisoformat(rental["ends_at"])
+            new_ends = max(current_end, current_time()) + timedelta(
                 hours=int(extra_hours)
             )
             self.conn.execute(
@@ -855,6 +856,12 @@ class Database:
         return len(rows)
 
     def update_mmr(self, account_id: int, mmr: int | None):
+        if mmr is not None and (
+            isinstance(mmr, bool)
+            or not isinstance(mmr, int)
+            or not 0 <= mmr <= 15000
+        ):
+            raise ValueError("MMR must be an integer between 0 and 15000")
         with self.conn:
             row = self.conn.execute(
                 "SELECT mmr FROM accounts WHERE account_id = ?",
@@ -874,8 +881,14 @@ class Database:
             return changed
 
     def update_behavior_score(self, account_id: int, behavior_score: int):
-        if behavior_score < 0:
-            raise ValueError("Behavior score must be non-negative")
+        if (
+            isinstance(behavior_score, bool)
+            or not isinstance(behavior_score, int)
+            or not 0 <= behavior_score <= 12000
+        ):
+            raise ValueError(
+                "Behavior score must be an integer between 0 and 12000"
+            )
         with self.conn:
             cursor = self.conn.execute(
                 "UPDATE accounts SET behavior_score = ? WHERE account_id = ?",
@@ -922,6 +935,8 @@ class Database:
             )
 
     def queue_notification(self, text: str, severity: str = "warning"):
+        if severity not in {"warning", "critical"}:
+            raise ValueError("Notification severity must be warning or critical")
         with self.conn:
             self.conn.execute(
                 "INSERT INTO notifications (ts, text, severity) VALUES (?, ?, ?)",

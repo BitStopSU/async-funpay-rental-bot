@@ -731,6 +731,8 @@ class AsyncFunctionalTests(unittest.IsolatedAsyncioTestCase):
         self.db.queue_notification("urgent", severity="critical")
         row = self.db.get_pending_notifications(severity="critical")[0]
         with (
+            patch.object(Config, "TG_BOT_TOKEN", "test-token"),
+            patch.object(Config, "TG_ADMIN_ID", 42),
             patch.object(notify, "critical", new_callable=AsyncMock) as send,
             patch.object(notify.logger, "error"),
         ):

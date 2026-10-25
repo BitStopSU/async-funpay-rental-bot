@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -15,11 +16,14 @@ import funpay_bot
 import main as app_main
 import notify
 import password_worker
+import profile_verification
 import ticker
 from config import Config
-from database import Database
+from database import Database, DuplicateAccountError
 from funpay_bot import RentalBot
+from funpay_session import FunPayAccount
 from i18n import tr
+from listing_sync import normalize_funpay_lot_id
 from prepare_listing import build_listing_text
 
 
@@ -45,6 +49,30 @@ class DatabaseFunctionalTests(unittest.TestCase):
             "order-1", user_id, account_id, "1001", hours, buyer, chat_id
         )
         return user_id, account_id, end
+
+    def test_funpay_lot_id_parser_accepts_supported_link_formats_only(self):
+        for value in (
+            "80402747",
+            "https://funpay.com/lots/offer?id=80402747",
+            "https://www.funpay.com/lots/offer/?id=80402747",
+            "funpay.com/lots/offer?id=80402747",
+            "www.funpay.com/lots/offer?id=80402747",
+            "FUNPAY.COM/lots/offer?id=80402747",
+            "<https://funpay.com/lots/offer?id=80402747>",
+            "https://funpay.com/lots/offer?id=80402747.",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(normalize_funpay_lot_id(value), "80402747")
+        for value in (
+            "https://funpay.com.evil.example/lots/offer?id=80402747",
+            "https://example.com/lots/offer?id=80402747",
+            "https://user@funpay.com/lots/offer?id=80402747",
+            "http://funpay.com/lots/offer?id=80402747",
+            "https://funpay.com/lots/offer?id=80402747&id=900",
+            "https://funpay.com/lots/81/trade",
+        ):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                normalize_funpay_lot_id(value)
 
     def test_rental_creation_extension_and_expiry_rules(self):
         user_id, account_id, created_end = self.add_lot_account()
@@ -123,6 +151,20 @@ class DatabaseFunctionalTests(unittest.TestCase):
             1,
         )
 
+    def test_available_lots_exclude_rented_and_vac_banned_accounts(self):
+        _, available_id, _ = self.add_lot_account(buyer="renter")
+        account_id = self.db.add_account(dota_account_id="987654", mmr=3000)
+        self.db.register_lot("1002", "Another listing", 3.0, account_id)
+        self.db.mark_vac_banned("76561198000000001")
+        available = self.db.get_available_lots()
+        self.assertEqual([row["lot_id"] for row in available], ["1002"])
+        self.db.create_rental(
+            "order-2", self.db.get_or_create_user("buyer-2"), account_id,
+            "1002", 1, "buyer-2", "chat-2",
+        )
+        self.assertEqual(self.db.get_available_lots(), [])
+        self.assertIsNotNone(available_id)
+
     def test_late_extension_starts_now_without_expiry_buffer(self):
         _, _, original_end = self.add_lot_account(hours=1)
         expired_at = datetime.now() - timedelta(minutes=10)
@@ -145,6 +187,39 @@ class DatabaseFunctionalTests(unittest.TestCase):
         )
         self.assertNotEqual(extended_end, original_end + timedelta(hours=2))
         self.assertIsNone(self.db.release_expired_rental("order-1"))
+
+    def test_extension_payment_request_holds_expiry_without_changing_paid_time(self):
+        _, account_id, original_end = self.add_lot_account(hours=1)
+        request = self.db.create_extension_request("chat")
+        repeated = self.db.create_extension_request("chat")
+        self.assertEqual(request["request_id"], repeated["request_id"])
+        self.assertEqual(request["expires_at"], repeated["expires_at"])
+        self.assertEqual(
+            datetime.fromisoformat(
+                self.db.get_active_rental_by_chat("chat")["ends_at"]
+            ),
+            original_end,
+        )
+
+        self.db.conn.execute(
+            "UPDATE rentals SET ends_at = ? WHERE order_id = 'order-1'",
+            ((datetime.now() - timedelta(seconds=1)).isoformat(),),
+        )
+        self.assertEqual(self.db.get_expired_rentals(), [])
+        self.db.conn.execute(
+            "UPDATE extension_requests SET expires_at = ? WHERE request_id = ?",
+            ((datetime.now() - timedelta(seconds=1)).isoformat(), request["request_id"]),
+        )
+        self.assertEqual(len(self.db.get_expired_rentals()), 1)
+        released = self.db.release_expired_rental("order-1")
+        self.assertEqual(released["account_id"], account_id)
+        self.assertEqual(
+            self.db.conn.execute(
+                "SELECT status FROM extension_requests WHERE request_id = ?",
+                (request["request_id"],),
+            ).fetchone()["status"],
+            "expired",
+        )
 
     def test_manual_password_task_and_notification_queue(self):
         _, account_id, _ = self.add_lot_account(hours=1)
@@ -183,6 +258,38 @@ class DatabaseFunctionalTests(unittest.TestCase):
         for invalid_behavior in (-1, 12001, True, 1.5):
             with self.subTest(behavior=invalid_behavior), self.assertRaises(ValueError):
                 self.db.update_behavior_score(account_id, invalid_behavior)
+
+    def test_duplicate_account_ids_are_rejected_on_add_and_edit(self):
+        first_id = self.db.add_account(
+            steamid64="76561198000000123",
+            dota_account_id="123456",
+        )
+        with self.assertRaises(DuplicateAccountError) as duplicate_dota:
+            self.db.add_account(
+                steamid64="76561198000000456",
+                dota_account_id="123456",
+            )
+        self.assertEqual(duplicate_dota.exception.existing_account_id, first_id)
+
+        with self.assertRaises(DuplicateAccountError) as duplicate_steam:
+            self.db.add_account(
+                steamid64="76561198000000123",
+                dota_account_id="654321",
+            )
+        self.assertEqual(duplicate_steam.exception.existing_account_id, first_id)
+
+        second_id = self.db.add_account(dota_account_id="654321")
+        with self.assertRaises(DuplicateAccountError) as duplicate_edit:
+            self.db.set_dota_account_id(second_id, "123456")
+        self.assertEqual(duplicate_edit.exception.existing_account_id, first_id)
+        with self.assertRaises(DuplicateAccountError):
+            self.db.update_account_public_field(
+                second_id, "steamid64", "76561198000000123"
+            )
+        self.assertEqual(
+            self.db.conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0],
+            2,
+        )
 
     def test_screenshot_submission_is_idempotent_and_audited(self):
         _, account_id, _ = self.add_lot_account()
@@ -290,6 +397,9 @@ class DatabaseFunctionalTests(unittest.TestCase):
             )
             self.assertEqual(migrated.get_lot("7001")["account_id"], 7)
             self.assertEqual(
+                migrated.get_account_listing_data(7)["mmr_source"], "manual"
+            )
+            self.assertEqual(
                 list(migrated.conn.execute("PRAGMA foreign_key_check")), []
             )
         finally:
@@ -317,16 +427,27 @@ class _FakeResponse:
 
 
 class _FakeHttpClient:
-    def __init__(self, steam_players=None, mmr=4500):
+    def __init__(
+        self, steam_players=None, mmr=4500, rank_tier=None,
+        profile_payloads=None,
+    ):
         self.steam_players = steam_players or []
         self.mmr = mmr
+        self.rank_tier = rank_tier
+        self.profile_payloads = profile_payloads or {}
         self.calls = []
 
     async def get(self, url, params=None):
         self.calls.append((url, params))
         if url == daily_checks.STEAM_BANS_URL:
             return _FakeResponse({"players": self.steam_players})
-        return _FakeResponse({"mmr_estimate": {"estimate": self.mmr}})
+        dota_id = url.rsplit("/", maxsplit=1)[-1]
+        if dota_id in self.profile_payloads:
+            return _FakeResponse(self.profile_payloads[dota_id])
+        return _FakeResponse({
+            "mmr_estimate": {"estimate": self.mmr},
+            "rank_tier": self.rank_tier,
+        })
 
     async def aclose(self):
         return None
@@ -336,6 +457,36 @@ class _FailingHttpClient(_FakeHttpClient):
     async def get(self, url, params=None):
         self.calls.append((url, params))
         raise daily_checks.httpx.ConnectError("mocked offline")
+
+
+class _ProfileResponse:
+    def __init__(self, *, status_code=200, payload=None, text=""):
+        self.status_code = status_code
+        self.payload = payload
+        self.text = text
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise ValueError("mocked HTTP failure")
+
+    def json(self):
+        return self.payload
+
+
+class _ProfileClient:
+    def __init__(self, opendota, dotabuff, steam=None):
+        self.opendota = opendota
+        self.dotabuff = dotabuff
+        self.steam = steam
+        self.calls = []
+
+    async def get(self, url, params=None):
+        self.calls.append((url, params))
+        if "api.opendota.com" in url:
+            return self.opendota
+        if "api.steampowered.com" in url:
+            return self.steam
+        return self.dotabuff
 
 
 class AsyncFunctionalTests(unittest.IsolatedAsyncioTestCase):
@@ -443,6 +594,70 @@ class AsyncFunctionalTests(unittest.IsolatedAsyncioTestCase):
             self.db.get_pending_notifications(severity="warning")[0]["text"],
             tr("notify_vac_disabled"),
         )
+
+    async def test_rank_tier_is_approximate_mmr_fallback_only(self):
+        approximate_account = self.db.add_account(
+            dota_account_id="555557",
+            mmr=1000,
+        )
+        exact_account = self.db.add_account(
+            dota_account_id="555558",
+            mmr=2000,
+        )
+        client = _FakeHttpClient(profile_payloads={
+            "555557": {
+                "mmr_estimate": {"estimate": None},
+                "rank_tier": 63,
+            },
+            "555558": {
+                "mmr_estimate": {"estimate": 4200},
+                "rank_tier": 63,
+            },
+        })
+        with (
+            patch.object(Config, "STEAM_API_KEY", None),
+            patch.object(Config, "OPENDOTA_REQUEST_DELAY", 0),
+        ):
+            await daily_checks.run_daily_checks(self.db, client)
+
+        approximate = self.db.get_account_listing_data(approximate_account)
+        self.assertEqual(approximate["mmr"], 4158)
+        self.assertEqual(approximate["mmr_source"], "rank_tier_approx")
+        title, description = build_listing_text(approximate, 3.0)
+        self.assertIn("~4158", title)
+        self.assertIn("~4158", description)
+        self.assertIn("MMR: ~4158", admin_menu._accounts_text(self.db))
+
+        exact = self.db.get_account_listing_data(exact_account)
+        self.assertEqual(exact["mmr"], 4200)
+        self.assertEqual(exact["mmr_source"], "opendota_estimate")
+        log = self.db.conn.execute(
+            """SELECT details, severity FROM logs
+               WHERE event_type = 'account_mmr_checked'
+                 AND account_id = ? ORDER BY log_id DESC LIMIT 1""",
+            (approximate_account,),
+        ).fetchone()
+        self.assertEqual(json.loads(log["details"])["source"], "rank_tier_approx")
+        self.assertEqual(log["severity"], "warning")
+
+    async def test_rank_tier_mmr_table_rejects_unsupported_values(self):
+        expected = {
+            11: 0,
+            25: 1386,
+            43: 2618,
+            63: 4158,
+            75: 5420,
+        }
+        for rank_tier, mmr in expected.items():
+            with self.subTest(rank_tier=rank_tier):
+                self.assertEqual(
+                    daily_checks.estimate_mmr_from_rank_tier(rank_tier), mmr
+                )
+        for rank_tier in (None, 0, 10, 16, 80, 85, "invalid", True):
+            with self.subTest(rank_tier=rank_tier):
+                self.assertIsNone(
+                    daily_checks.estimate_mmr_from_rank_tier(rank_tier)
+                )
 
     async def test_daily_check_api_failures_are_audited_and_queued(self):
         self.db.add_account(
@@ -571,6 +786,158 @@ class AsyncFunctionalTests(unittest.IsolatedAsyncioTestCase):
             1,
         )
 
+    async def test_akk_lists_available_lots_and_returns_selected_link(self):
+        self.db.add_account(
+            dota_account_id="987654", mmr=3200, behavior_score=9500
+        )
+        self.db.register_lot("3003", "Available listing", 2.5, 1)
+        bot = RentalBot("not-used", self.db)
+        bot.acc = SimpleNamespace(id=999, send_message=AsyncMock())
+        for text in ("/akk", "/akk 3003"):
+            message = SimpleNamespace(
+                author_id=12345, chat_id=67890, text=text, image_link=None
+            )
+            await bot.on_message(SimpleNamespace(message=message))
+        self.assertIn("/akk <ID_лота>", bot.acc.send_message.await_args_list[0].args[1])
+        self.assertIn(
+            "https://funpay.com/lots/offer?id=3003",
+            bot.acc.send_message.await_args_list[1].args[1],
+        )
+        self.assertEqual(
+            self.db.conn.execute(
+                """SELECT COUNT(*) FROM logs
+                   WHERE event_type IN (
+                       'available_lots_requested', 'available_lot_selected'
+                   )"""
+            ).fetchone()[0],
+            2,
+        )
+
+    async def test_dodep_opens_fixed_window_and_sends_listing_link(self):
+        self.add_account_with_lot()
+        bot = RentalBot("not-used", self.db)
+        bot.acc = SimpleNamespace(id=999, send_message=AsyncMock())
+        message = SimpleNamespace(
+            author_id=12345, chat_id="chat", text="/dodep", image_link=None
+        )
+        with patch.object(Config, "EXTENSION_PAYMENT_WINDOW_MINUTES", 10):
+            await bot.on_message(SimpleNamespace(message=message))
+            await bot.on_message(SimpleNamespace(message=message))
+        self.assertEqual(bot.acc.send_message.await_count, 2)
+        self.assertIn(
+            "https://funpay.com/lots/offer?id=2001",
+            bot.acc.send_message.await_args_list[0].args[1],
+        )
+        requests = self.db.conn.execute(
+            "SELECT * FROM extension_requests WHERE status = 'pending'"
+        ).fetchall()
+        self.assertEqual(len(requests), 1)
+
+    async def test_paid_order_from_dodep_link_extends_only_after_payment(self):
+        self.add_account_with_lot()
+        rental = self.db.get_active_rental_by_chat("chat")
+        original_end = datetime.fromisoformat(rental["ends_at"])
+        self.db.create_extension_request("chat")
+        bot = RentalBot("not-used", self.db)
+        bot.acc = SimpleNamespace(
+            get_order=AsyncMock(return_value=SimpleNamespace(short_description=None)),
+            send_message=AsyncMock(),
+        )
+        order = SimpleNamespace(
+            id="paid-extension",
+            status=OrderStatuses.PAID,
+            buyer_username="buyer",
+            buyer_id=12345,
+            chat_id="chat",
+            amount=2,
+            lot_id="2001",
+        )
+        await bot.on_new_order(SimpleNamespace(order=order))
+        updated = self.db.get_active_rental_by_chat("chat")
+        self.assertEqual(
+            datetime.fromisoformat(updated["ends_at"]),
+            original_end + timedelta(hours=2),
+        )
+        self.assertEqual(
+            tuple(self.db.conn.execute(
+                """SELECT status, extension_order_id FROM extension_requests"""
+            ).fetchone()),
+            ("paid", "paid-extension"),
+        )
+
+    async def test_late_dodep_payment_goes_to_operator_not_new_rental(self):
+        self.add_account_with_lot()
+        request = self.db.create_extension_request("chat")
+        self.db.conn.execute(
+            "UPDATE rentals SET ends_at = ? WHERE order_id = 'order-main'",
+            ((datetime.now() - timedelta(minutes=11)).isoformat(),),
+        )
+        self.db.conn.execute(
+            "UPDATE extension_requests SET expires_at = ? WHERE request_id = ?",
+            ((datetime.now() - timedelta(minutes=1)).isoformat(), request["request_id"]),
+        )
+        self.assertIsNotNone(self.db.release_expired_rental("order-main"))
+        bot = RentalBot("not-used", self.db)
+        bot.acc = SimpleNamespace(
+            get_order=AsyncMock(return_value=SimpleNamespace(short_description=None)),
+            send_message=AsyncMock(),
+        )
+        order = SimpleNamespace(
+            id="late-paid-extension",
+            status=OrderStatuses.PAID,
+            buyer_username="buyer",
+            buyer_id=12345,
+            chat_id="chat",
+            amount=1,
+            lot_id="2001",
+        )
+        await bot.on_new_order(SimpleNamespace(order=order))
+        self.assertEqual(
+            self.db.conn.execute("SELECT COUNT(*) FROM rentals").fetchone()[0],
+            1,
+        )
+        self.assertEqual(
+            self.db.conn.execute(
+                """SELECT COUNT(*) FROM logs
+                   WHERE event_type = 'late_extension_payment_referred'"""
+            ).fetchone()[0],
+            1,
+        )
+
+    async def test_funpay_lot_form_parser_accepts_html_response(self):
+        class FakeResponse:
+            text = """
+                <form>
+                  <input name="offer_id" value="123">
+                  <input name="price" value="4.5">
+                  <input type="checkbox" name="active" checked>
+                  <input name="amount" value="1">
+                  <textarea name="fields[summary][ru]">Title</textarea>
+                  <textarea name="fields[summary][en]">Title</textarea>
+                  <textarea name="fields[desc][ru]">Description</textarea>
+                  <textarea name="fields[desc][en]">Description</textarea>
+                  <select name="fields[type]">
+                    <option value="1" selected>Rent</option>
+                  </select>
+                </form>
+            """
+
+            def json(self):
+                raise json.JSONDecodeError("FunPay returned HTML", "", 0)
+
+        account = FunPayAccount(golden_key="not-used")
+        account._Account__initiated = True
+        with patch.object(
+            account, "method", new_callable=AsyncMock,
+            return_value=FakeResponse(),
+        ) as request:
+            fields = await account.get_lot_fields(123)
+        request.assert_awaited_once()
+        self.assertEqual(fields.title_ru, "Title")
+        self.assertEqual(fields.price, 4.5)
+        self.assertTrue(fields.active)
+        self.assertEqual(fields.fields["fields[type]"], "1")
+
     async def test_unpaid_funpay_order_is_ignored(self):
         bot = RentalBot("not-used", self.db)
         bot.acc = SimpleNamespace(get_order=AsyncMock())
@@ -632,6 +999,14 @@ class AsyncFunctionalTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch.object(Config, "TG_ADMIN_ID", admin_id),
             patch.object(admin_menu, "_send_text", new_callable=AsyncMock) as send,
+            patch.object(
+                admin_menu,
+                "verify_dota_profile",
+                new_callable=AsyncMock,
+                return_value=profile_verification.DotaProfileVerification(
+                    "found", "unknown"
+                ),
+            ) as verify,
         ):
             unauthorized = {
                 "message": {
@@ -658,6 +1033,7 @@ class AsyncFunctionalTests(unittest.IsolatedAsyncioTestCase):
             await admin_menu._handle_update(
                 client, self.db, authorized, bot, pending
             )
+            verify.assert_awaited_once_with("123456")
         account = self.db.conn.execute(
             """SELECT dota_account_id, mmr, behavior_score
                FROM accounts"""
@@ -665,6 +1041,210 @@ class AsyncFunctionalTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(account), ("123456", 4000, 9000))
         self.assertFalse(pending)
         bot.sync_account_listing.assert_not_awaited()
+
+    async def test_unverified_dota_profile_is_not_added(self):
+        admin_id = 4343
+        pending = {"action": "new_account"}
+        client = object()
+
+        def update(text):
+            return {
+                "message": {
+                    "from": {"id": admin_id},
+                    "chat": {"id": admin_id},
+                    "text": text,
+                }
+            }
+
+        with (
+            patch.object(Config, "TG_ADMIN_ID", admin_id),
+            patch.object(admin_menu, "_telegram_call", new_callable=AsyncMock),
+            patch.object(admin_menu, "_send_text", new_callable=AsyncMock) as send,
+            patch.object(
+                admin_menu,
+                "verify_dota_profile",
+                new_callable=AsyncMock,
+                return_value=profile_verification.DotaProfileVerification(
+                    "not_found", "unknown"
+                ),
+            ),
+        ):
+            await admin_menu._handle_update(
+                client, self.db, update("123457 4000"), pending=pending
+            )
+            self.assertEqual(pending["action"], "new_account")
+            self.assertEqual(
+                self.db.conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0],
+                0,
+            )
+            self.assertIn("не нашёл профиль", send.await_args.args[1])
+            self.assertEqual(
+                self.db.conn.execute(
+                    """SELECT COUNT(*) FROM logs
+                       WHERE event_type = 'dota_profile_verification_rejected'"""
+                ).fetchone()[0],
+                1,
+            )
+
+    async def test_duplicate_dota_profile_is_rejected_before_external_verification(self):
+        admin_id = 4344
+        existing_id = self.db.add_account(dota_account_id="123457")
+        pending = {"action": "new_account"}
+        update = {
+            "message": {
+                "from": {"id": admin_id},
+                "chat": {"id": admin_id},
+                "text": "123457",
+            }
+        }
+        with (
+            patch.object(Config, "TG_ADMIN_ID", admin_id),
+            patch.object(
+                admin_menu, "_send_text", new_callable=AsyncMock
+            ) as send,
+            patch.object(
+                admin_menu, "verify_dota_profile", new_callable=AsyncMock
+            ) as verify,
+        ):
+            await admin_menu._handle_update(
+                object(), self.db, update, pending=pending
+            )
+
+        verify.assert_not_awaited()
+        self.assertIn(f"№{existing_id}", send.await_args.args[1])
+        self.assertEqual(
+            self.db.conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0],
+            1,
+        )
+        self.assertEqual(pending["action"], "new_account")
+        self.assertEqual(
+            self.db.conn.execute(
+                """SELECT COUNT(*) FROM logs
+                   WHERE event_type = 'duplicate_account_rejected'"""
+            ).fetchone()[0],
+            1,
+        )
+
+    async def test_unavailable_opendota_does_not_allow_manual_account_creation(self):
+        admin_id = 4444
+        pending = {"action": "new_account"}
+        client = object()
+        update = {
+            "message": {
+                "from": {"id": admin_id},
+                "chat": {"id": admin_id},
+                "text": "123459",
+            }
+        }
+        with (
+            patch.object(Config, "TG_ADMIN_ID", admin_id),
+            patch.object(admin_menu, "_send_text", new_callable=AsyncMock) as send,
+            patch.object(
+                admin_menu,
+                "verify_dota_profile",
+                new_callable=AsyncMock,
+                return_value=profile_verification.DotaProfileVerification(
+                    "unknown", "found"
+                ),
+            ),
+        ):
+            await admin_menu._handle_update(
+                client, self.db, update, pending=pending
+            )
+        self.assertEqual(
+            self.db.conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0],
+            0,
+        )
+        self.assertIn("OpenDota", send.await_args.args[1])
+
+    async def test_profile_verification_accepts_exact_public_profiles_only(self):
+        client = _ProfileClient(
+            _ProfileResponse(payload={"profile": {"account_id": 123456}}),
+            _ProfileResponse(
+                text=(
+                    '<html><head><link rel="canonical" '
+                    'href="https://www.dotabuff.com/players/123456"></head></html>'
+                )
+            ),
+        )
+        with patch.object(profile_verification.Config, "STEAM_API_KEY", None):
+            result = await profile_verification.verify_dota_profile(
+                "123456", client
+            )
+        self.assertEqual(result.verified_by, ["OpenDota", "Dotabuff"])
+        self.assertEqual(len(client.calls), 2)
+
+        unknown_client = _ProfileClient(
+            _ProfileResponse(payload={"profile": None}),
+            _ProfileResponse(text="<html><title>Welcome</title></html>"),
+        )
+        unknown = await profile_verification.verify_dota_profile(
+            "123456", unknown_client
+        )
+        self.assertEqual(unknown.opendota, profile_verification.NOT_FOUND)
+        self.assertEqual(unknown.dotabuff, profile_verification.UNKNOWN)
+        self.assertEqual(unknown.verified_by, [])
+        with self.assertRaises(ValueError):
+            await profile_verification.verify_dota_profile("0", unknown_client)
+
+    async def test_profile_verification_uses_steam_api_for_visibility(self):
+        dota_id = "123456"
+        steamid64 = str(
+            profile_verification.STEAM_ID_BASE + int(dota_id)
+        )
+        for visibility, expected in (
+            (1, "private"),
+            (2, "friends_only"),
+            (3, "public"),
+        ):
+            with self.subTest(visibility=visibility):
+                client = _ProfileClient(
+                    _ProfileResponse(
+                        payload={
+                            "profile": {
+                                "account_id": int(dota_id),
+                                "steamid": steamid64,
+                            },
+                            "mmr_estimate": {"estimate": 4200},
+                            "rank_tier": 51,
+                        }
+                    ),
+                    _ProfileResponse(text="<html></html>"),
+                    _ProfileResponse(
+                        payload={
+                            "response": {
+                                "players": [
+                                    {
+                                        "steamid": steamid64,
+                                        "communityvisibilitystate": visibility,
+                                        "personaname": "Public test name",
+                                    }
+                                ]
+                            }
+                        }
+                    ),
+                )
+                with patch.object(
+                    profile_verification.Config,
+                    "STEAM_API_KEY",
+                    "test-key",
+                ):
+                    result = await profile_verification.verify_dota_profile(
+                        dota_id, client
+                    )
+                self.assertEqual(result.opendota, profile_verification.FOUND)
+                self.assertEqual(result.steamid64, steamid64)
+                self.assertEqual(result.steam_visibility, expected)
+                self.assertEqual(result.persona_name, "Public test name")
+                self.assertEqual(result.mmr_estimate, 4200)
+                self.assertEqual(result.rank_tier, 51)
+                self.assertEqual(
+                    client.calls[-1],
+                    (
+                        profile_verification.STEAM_SUMMARIES_URL,
+                        {"key": "test-key", "steamids": steamid64},
+                    ),
+                )
 
     async def test_admin_link_and_edit_callbacks_follow_pending_states(self):
         admin_id = 5151
@@ -691,6 +1271,20 @@ class AsyncFunctionalTests(unittest.IsolatedAsyncioTestCase):
             patch.object(admin_menu, "_telegram_call", new_callable=AsyncMock),
             patch.object(admin_menu, "_send_text", new_callable=AsyncMock),
         ):
+            link_message = {
+                "message": {
+                    "from": {"id": admin_id},
+                    "chat": {"id": admin_id},
+                    "text": "https://funpay.com/lots/offer?id=4001",
+                }
+            }
+            pending["action"] = "lot_id"
+            await admin_menu._handle_update(
+                client, self.db, link_message, bot, pending
+            )
+            self.assertEqual(pending["lot_id"], "4001")
+            self.assertEqual(pending["action"], "link_account")
+
             await admin_menu._handle_update(
                 client, self.db, callback(f"admin:link_account:{account_id}"),
                 bot, pending,

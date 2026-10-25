@@ -6,6 +6,17 @@ _MESSAGES = {
         "paid_order_operator": "Оплата получена. Заказ передан оператору.",
         "extension_operator": "Оплата получена. Для этого заказа требуется оператор.",
         "extension_confirmed": "Аренда продлена на {hours} ч. Доступ до: {ends}.",
+        "extension_command_usage": "Для продления отправьте команду /dodep без параметров.",
+        "extension_request_unavailable": (
+            "Не удалось открыть окно продления: активная аренда не найдена "
+            "или её срок уже истёк. Обратитесь к оператору."
+        ),
+        "extension_payment_link": (
+            "Ссылка на лот для продления:\n{link}\n"
+            "Оплатите выбранное количество часов до {expires}. "
+            "Срок продлится только после подтверждения оплаты; 10-минутное "
+            "окно не добавляет оплачиваемое время."
+        ),
         "already_renting": (
             "Оплата получена. У вас уже есть активный заказ; обратитесь к оператору."
         ),
@@ -60,6 +71,17 @@ _MESSAGES = {
             "Обратитесь к оператору."
         ),
         "credential_request_inactive": "Активная аренда для этого чата не найдена.",
+        "available_lots_empty": "Сейчас свободных лотов нет.",
+        "available_lots_usage": "Используйте /akk для списка или /akk <ID_лота>, чтобы получить ссылку.",
+        "available_lots_changed": "Этот вариант уже недоступен. Отправьте /akk, чтобы обновить список.",
+        "available_lots_header": "Доступные лоты (цена указана за 1 час):",
+        "available_lots_continued": "Доступные лоты (продолжение):",
+        "available_lots_footer": "Чтобы получить ссылку, отправьте /akk <ID_лота>.",
+        "available_lot_row": "{lot_id}. {title} · MMR: {mmr} · {price} за час",
+        "available_lot_link": (
+            "Лот {lot_id}:\n{link}\n"
+            "Количество единиц при заказе соответствует часам аренды."
+        ),
         "notify_lot_unmatched": (
             "Не удалось сопоставить оплаченный заказ №{order_id} "
             "с настроенным лотом."
@@ -154,7 +176,9 @@ _MESSAGES = {
             "Свободные аккаунты без лота (локальный ID / Dota ID / MMR / "
             "порядочность):"
         ),
-        "cli_lot_id_invalid": "ID лота должен быть числом",
+        "cli_lot_id_invalid": (
+            "Отправьте числовой ID лота или HTTPS-ссылку на лот FunPay."
+        ),
         "cli_lot_already_registered": "Этот лот уже привязан к аккаунту",
         "cli_lot_fetch_failed": (
             "Не удалось получить данные лота FunPay. Проверьте ID и "
@@ -211,7 +235,7 @@ _MESSAGES = {
             "привязать его к этому аккаунту."
         ),
         "cli_add_failed": "Не удалось добавить аккаунт: {error}",
-        "cli_lot_id": "ID лота FunPay: ",
+        "cli_lot_id": "ID лота или HTTPS-ссылка FunPay: ",
         "cli_lot_title": "Точное название объявления (используется для сопоставления заказа): ",
         "cli_lot_price": "Цена за час аренды: ",
         "cli_lot_account": "Локальный ID аккаунта из add_account.py: ",
@@ -320,10 +344,40 @@ _MESSAGES = {
             "Формат: Dota ID [MMR] [порядочность]. Нужен числовой Dota ID; "
             "MMR — 0–15000, порядочность — 0–12000. Не отправляйте пароли или коды."
         ),
+        "admin_menu_add_account_duplicate": (
+            "Этот профиль уже есть в списке как аккаунт №{account_id}. "
+            "Повторная карточка не создана."
+        ),
+        "admin_menu_add_account_verified": (
+            "Профиль найден через {sources}. Карточка аккаунта создана: "
+            "№{account_id}.\n"
+            "Dota ID: {dota_id}\n"
+            "SteamID64: {steamid64}\n"
+            "Имя Steam: {profile_name}\n"
+            "Профиль Steam: {visibility}\n"
+            "MMR: {mmr}; rank_tier: {rank_tier}\n"
+            "SteamDB ID finder: {steamdb_url}\n"
+            "Пароли и коды не запрашивались и не сохранялись."
+        ),
+        "admin_menu_add_account_not_found": (
+            "OpenDota не нашёл профиль с таким Dota ID. Карточка не создана. "
+            "Проверьте ID профиля Dota 2 и отправьте его снова."
+        ),
+        "admin_menu_add_account_check_unavailable": (
+            "Не удалось подтвердить профиль через OpenDota (сеть или API "
+            "временно недоступны). Карточка не создана; попробуйте позже."
+        ),
         "admin_menu_add_account_saved": (
             "Карточка аккаунта создана: №{account_id}. Секреты не запрашивались "
             "и не сохранялись. При необходимости измените несекретные поля и "
             "привяжите лот через меню «Аккаунты»."
+        ),
+        "admin_profile_visibility_public": "открытый",
+        "admin_profile_visibility_private": "закрытый",
+        "admin_profile_visibility_friends": "только для друзей",
+        "admin_profile_visibility_unknown": "не удалось определить",
+        "admin_profile_visibility_not_configured": (
+            "не проверен: укажите STEAM_API_KEY в .env"
         ),
         "admin_menu_listing_text": (
             "Текущие значения MMR/порядочности и связанные лоты:\n"
@@ -333,8 +387,8 @@ _MESSAGES = {
             "нажмите «Обновить порядочность»."
         ),
         "admin_menu_link_enter_lot": (
-            "Отправьте ID уже созданного лота FunPay. Название и цена будут "
-            "получены автоматически; цену бот не меняет."
+            "Отправьте ID или HTTPS-ссылку на уже созданный лот FunPay. "
+            "Название и цена будут получены автоматически; цену бот не меняет."
         ),
         "admin_menu_link_no_accounts": (
             "Нет свободных аккаунтов без привязанного лота. Сначала добавьте "
@@ -466,6 +520,17 @@ _MESSAGES = {
         "paid_order_operator": "Payment received. Your order has been referred to an operator.",
         "extension_operator": "Payment received. An operator needs to review this order.",
         "extension_confirmed": "Rental extended by {hours} h. Access ends: {ends}.",
+        "extension_command_usage": "Send /dodep without arguments to request an extension.",
+        "extension_request_unavailable": (
+            "Could not open an extension payment window: no active rental was "
+            "found or it has already expired. Please contact the operator."
+        ),
+        "extension_payment_link": (
+            "Extension listing:\n{link}\n"
+            "Pay for the selected number of hours by {expires}. "
+            "The rental is extended only after payment is confirmed; the "
+            "10-minute window does not add paid time."
+        ),
         "already_renting": (
             "Payment received. You already have an active order; please contact an operator."
         ),
@@ -520,6 +585,17 @@ _MESSAGES = {
             "Please contact an operator."
         ),
         "credential_request_inactive": "No active rental was found for this chat.",
+        "available_lots_empty": "There are no available listings right now.",
+        "available_lots_usage": "Use /akk for the list or /akk <listing_ID> to get a link.",
+        "available_lots_changed": "That option is no longer available. Send /akk to refresh the list.",
+        "available_lots_header": "Available listings (price is per hour):",
+        "available_lots_continued": "Available listings (continued):",
+        "available_lots_footer": "Send /akk <listing_ID> to get a link.",
+        "available_lot_row": "{lot_id}. {title} · MMR: {mmr} · {price} per hour",
+        "available_lot_link": (
+            "Listing {lot_id}:\n{link}\n"
+            "The order quantity corresponds to rental hours."
+        ),
         "notify_lot_unmatched": (
             "Could not match paid order #{order_id} to a configured lot."
         ),
@@ -599,7 +675,9 @@ _MESSAGES = {
         "cli_lot_accounts_header": (
             "Free unlinked accounts (local ID / Dota ID / MMR / behavior score):"
         ),
-        "cli_lot_id_invalid": "Listing ID must be numeric",
+        "cli_lot_id_invalid": (
+            "Send a numeric listing ID or an HTTPS link to a FunPay listing."
+        ),
         "cli_lot_already_registered": "This listing is already linked to an account",
         "cli_lot_fetch_failed": (
             "Could not fetch the FunPay listing. Check its ID and FUNPAY_GOLDEN_KEY."
@@ -649,7 +727,7 @@ _MESSAGES = {
             "it to this account."
         ),
         "cli_add_failed": "Could not add account: {error}",
-        "cli_lot_id": "FunPay lot ID: ",
+        "cli_lot_id": "FunPay listing ID or HTTPS link: ",
         "cli_lot_title": "Exact listing title (used to match orders): ",
         "cli_lot_price": "Price per rental hour: ",
         "cli_lot_account": "Local account ID from add_account.py: ",
@@ -756,10 +834,40 @@ _MESSAGES = {
             "Format: Dota ID [MMR] [behavior score]. Dota ID must be numeric; "
             "MMR 0–15000, behavior 0–12000. Do not send passwords or codes."
         ),
+        "admin_menu_add_account_duplicate": (
+            "This profile is already listed as account #{account_id}. "
+            "No duplicate record was created."
+        ),
+        "admin_menu_add_account_verified": (
+            "Profile found through {sources}. Account record created: "
+            "#{account_id}.\n"
+            "Dota ID: {dota_id}\n"
+            "SteamID64: {steamid64}\n"
+            "Steam name: {profile_name}\n"
+            "Steam profile: {visibility}\n"
+            "MMR: {mmr}; rank_tier: {rank_tier}\n"
+            "SteamDB ID finder: {steamdb_url}\n"
+            "No passwords or codes were requested or stored."
+        ),
+        "admin_menu_add_account_not_found": (
+            "OpenDota did not find a profile for this Dota ID. No account record "
+            "was created. Check the Dota 2 profile ID and send it again."
+        ),
+        "admin_menu_add_account_check_unavailable": (
+            "Could not verify the profile through OpenDota (network/API "
+            "temporarily unavailable). No account record was created; try later."
+        ),
         "admin_menu_add_account_saved": (
             "Account record created: #{account_id}. No secrets were requested "
             "or stored. Edit other non-secret fields or link a listing from the "
             "Accounts menu."
+        ),
+        "admin_profile_visibility_public": "public",
+        "admin_profile_visibility_private": "private",
+        "admin_profile_visibility_friends": "friends only",
+        "admin_profile_visibility_unknown": "could not determine",
+        "admin_profile_visibility_not_configured": (
+            "not checked: set STEAM_API_KEY in .env"
         ),
         "admin_menu_listing_text": (
             "Current MMR/behavior values and linked listings:\n"
@@ -810,8 +918,8 @@ _MESSAGES = {
             "attempted if account data and FunPay are available."
         ),
         "admin_menu_link_enter_lot": (
-            "Send the ID of an existing FunPay listing. Its title and price will "
-            "be fetched automatically; the bot does not change the price."
+            "Send the ID or HTTPS link of an existing FunPay listing. Its title "
+            "and price will be fetched automatically; the bot does not change the price."
         ),
         "admin_menu_link_no_accounts": (
             "No free unlinked accounts. First add a no-secret account record "

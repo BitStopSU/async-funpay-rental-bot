@@ -10,6 +10,30 @@ from i18n import tr
 logger = logging.getLogger(__name__)
 STEAM_BANS_URL = "https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/"
 OPENDOTA_PLAYER_URL = "https://api.opendota.com/api/players/{}"
+RANK_TIER_MMR = {
+    1: (0, 154, 308, 462, 616),
+    2: (770, 924, 1078, 1232, 1386),
+    3: (1540, 1694, 1848, 2002, 2156),
+    4: (2310, 2464, 2618, 2772, 2926),
+    5: (3080, 3234, 3388, 3542, 3696),
+    6: (3850, 4004, 4158, 4312, 4466),
+    7: (4620, 4820, 5020, 5220, 5420),
+}
+
+
+def estimate_mmr_from_rank_tier(rank_tier) -> int | None:
+    if isinstance(rank_tier, bool):
+        return None
+    if isinstance(rank_tier, int):
+        tier = int(rank_tier)
+    elif isinstance(rank_tier, str) and rank_tier.isdecimal():
+        tier = int(rank_tier)
+    else:
+        return None
+    medal, star = divmod(tier, 10)
+    if not 1 <= star <= 5 or medal not in RANK_TIER_MMR:
+        return None
+    return RANK_TIER_MMR[medal][star - 1]
 
 
 async def run_daily_checks(
@@ -84,14 +108,23 @@ async def _check_mmr(
             estimate = payload.get("mmr_estimate") or {}
             mmr = estimate.get("estimate")
             if mmr is None:
-                db.log(
-                    "mmr_check_no_estimate",
-                    account_id=account_id,
-                    details={"provider": "OpenDota"},
-                    severity="warning",
-                )
+                mmr = estimate_mmr_from_rank_tier(payload.get("rank_tier"))
+                source = "rank_tier_approx"
+                if mmr is None:
+                    db.log(
+                        "mmr_check_no_estimate",
+                        account_id=account_id,
+                        details={
+                            "provider": "OpenDota",
+                            "rank_tier": payload.get("rank_tier"),
+                        },
+                        severity="warning",
+                    )
             else:
-                changed = db.update_mmr(account_id, int(mmr))
+                source = "opendota_estimate"
+            if mmr is not None:
+                mmr = int(mmr)
+                changed = db.update_mmr(account_id, mmr, source=source)
                 if changed and on_mmr_updated:
                     await on_mmr_updated(account_id)
         except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:

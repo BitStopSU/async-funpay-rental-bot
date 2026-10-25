@@ -11,8 +11,11 @@ import httpx
 from aioFunPayAPI.common import exceptions
 
 from config import Config
-from database import Database
+from database import Database, DuplicateAccountError
+from daily_checks import estimate_mmr_from_rank_tier
 from i18n import tr
+from listing_sync import normalize_funpay_lot_id
+from profile_verification import verify_dota_profile
 
 logger = logging.getLogger(__name__)
 POLL_TIMEOUT = 25
@@ -141,7 +144,14 @@ def _account_keyboard(accounts, callback_prefix: str) -> dict[str, Any]:
         label = f"#{account['account_id']}"
         if "dota_account_id" in account.keys() and account["dota_account_id"]:
             label += f" · Dota {account['dota_account_id']}"
-        label += f" · {account['mmr'] if account['mmr'] is not None else '—'} MMR"
+        mmr = account["mmr"] if account["mmr"] is not None else "—"
+        if (
+            account["mmr"] is not None
+            and "mmr_source" in account.keys()
+            and account["mmr_source"] == "rank_tier_approx"
+        ):
+            mmr = f"~{mmr}"
+        label += f" · {mmr} MMR"
         buttons.append(
             {
                 "text": label,
@@ -201,12 +211,18 @@ def _accounts_text(db: Database) -> str:
         return tr("admin_menu_accounts_empty")
     lines = []
     for account in accounts:
+        mmr = account["mmr"] if account["mmr"] is not None else "—"
+        if (
+            account["mmr"] is not None
+            and account["mmr_source"] == "rank_tier_approx"
+        ):
+            mmr = f"~{mmr}"
         lines.append(
             tr(
                 "admin_menu_account_row",
                 account_id=account["account_id"],
                 status=tr(f"admin_status_{account['status']}"),
-                mmr=account["mmr"] if account["mmr"] is not None else "—",
+                mmr=mmr,
                 vac=(
                     tr("admin_menu_vac_yes")
                     if account["vac_banned"]
@@ -414,7 +430,9 @@ async def _handle_update(
             pending.clear()
             await _send_text(client, tr("admin_menu_cancelled"), _back_keyboard())
         elif pending.get("action") == "lot_id":
-            if not text.isdecimal():
+            try:
+                lot_id = normalize_funpay_lot_id(text)
+            except ValueError:
                 await _send_text(client, tr("cli_lot_id_invalid"))
                 return
             accounts = db.get_unlinked_accounts()
@@ -425,7 +443,7 @@ async def _handle_update(
                 )
                 return
             pending["action"] = "link_account"
-            pending["lot_id"] = text
+            pending["lot_id"] = lot_id
             await _send_text(
                 client,
                 tr("admin_menu_link_choose_account"),
@@ -443,21 +461,153 @@ async def _handle_update(
                 not dota_account_id.isdecimal()
                 or (mmr_text != "-" and not mmr_text.isdecimal())
                 or (behavior_text != "-" and not behavior_text.isdecimal())
+                or not 1 <= int(dota_account_id) <= 0xFFFFFFFF
+                or (mmr_text != "-" and int(mmr_text) > 15000)
+                or (behavior_text != "-" and int(behavior_text) > 12000)
             ):
                 await _send_text(client, tr("admin_menu_add_account_invalid"))
                 return
             try:
-                account_id = db.add_account(
-                    dota_account_id=dota_account_id,
-                    mmr=int(mmr_text) if mmr_text != "-" else None,
-                    behavior_score=(
+                duplicate = db.find_duplicate_account(
+                    dota_account_id=dota_account_id
+                )
+                if duplicate:
+                    db.log(
+                        "duplicate_account_rejected",
+                        account_id=duplicate["account_id"],
+                        details={"dota_account_id": dota_account_id},
+                        severity="warning",
+                    )
+                    await _send_text(
+                        client,
+                        tr(
+                            "admin_menu_add_account_duplicate",
+                            account_id=duplicate["account_id"],
+                        ),
+                        _back_keyboard(),
+                    )
+                    return
+                pending_account = {
+                    "dota_account_id": dota_account_id,
+                    "mmr": int(mmr_text) if mmr_text != "-" else None,
+                    "behavior_score": (
                         int(behavior_text) if behavior_text != "-" else None
                     ),
+                }
+                verification = await verify_dota_profile(dota_account_id)
+                if verification.opendota == "found":
+                    mmr = (
+                        int(mmr_text)
+                        if mmr_text != "-"
+                        else verification.mmr_estimate
+                    )
+                    mmr_source = (
+                        "manual" if mmr_text != "-" else "opendota_estimate"
+                    )
+                    if mmr is None:
+                        mmr = estimate_mmr_from_rank_tier(
+                            verification.rank_tier
+                        )
+                        mmr_source = (
+                            "rank_tier_approx" if mmr is not None else "manual"
+                        )
+                    pending_account.update(
+                        steamid64=verification.steamid64,
+                        mmr=mmr,
+                        mmr_source=mmr_source,
+                    )
+                db.log(
+                    "dota_profile_verification",
+                    details={
+                        "opendota": verification.opendota,
+                        "dotabuff": verification.dotabuff,
+                    },
+                    severity=(
+                        "info" if verification.verified_by else "warning"
+                    ),
                 )
-                pending.clear()
+                if verification.opendota == "found":
+                    account_id = db.add_account(**pending_account)
+                    pending.clear()
+                    visibility = tr(
+                        {
+                            "public": "admin_profile_visibility_public",
+                            "private": "admin_profile_visibility_private",
+                            "friends_only": "admin_profile_visibility_friends",
+                            "unknown": "admin_profile_visibility_unknown",
+                            "not_configured": (
+                                "admin_profile_visibility_not_configured"
+                            ),
+                        }.get(
+                            verification.steam_visibility,
+                            "admin_profile_visibility_unknown",
+                        )
+                    )
+                    mmr_display = (
+                        f"~{pending_account['mmr']}"
+                        if pending_account["mmr"] is not None
+                        and pending_account["mmr_source"] == "rank_tier_approx"
+                        else (
+                            str(pending_account["mmr"])
+                            if pending_account["mmr"] is not None
+                            else "—"
+                        )
+                    )
+                    await _send_text(
+                        client,
+                        tr(
+                            "admin_menu_add_account_verified",
+                            sources=", ".join(verification.verified_by),
+                            account_id=account_id,
+                            dota_id=dota_account_id,
+                            steamid64=verification.steamid64 or "—",
+                            profile_name=verification.persona_name or "—",
+                            visibility=visibility,
+                            mmr=mmr_display,
+                            rank_tier=(
+                                verification.rank_tier
+                                if verification.rank_tier is not None
+                                else "—"
+                            ),
+                            steamdb_url=(
+                                "https://steamdb.com/ru/tools/"
+                                f"steam-id-finder?query={dota_account_id}"
+                            ),
+                        ),
+                        _back_keyboard(),
+                    )
+                else:
+                    status_key = (
+                        "admin_menu_add_account_not_found"
+                        if verification.opendota == "not_found"
+                        else "admin_menu_add_account_check_unavailable"
+                    )
+                    db.log(
+                        "dota_profile_verification_rejected",
+                        details={
+                            "opendota": verification.opendota,
+                            "dotabuff": verification.dotabuff,
+                        },
+                        severity="warning",
+                    )
+                    await _send_text(
+                        client,
+                        tr(status_key),
+                        _back_keyboard(),
+                    )
+            except DuplicateAccountError as exc:
+                db.log(
+                    "duplicate_account_rejected",
+                    account_id=exc.existing_account_id,
+                    details={"dota_account_id": dota_account_id},
+                    severity="warning",
+                )
                 await _send_text(
                     client,
-                    tr("admin_menu_add_account_saved", account_id=account_id),
+                    tr(
+                        "admin_menu_add_account_duplicate",
+                        account_id=exc.existing_account_id,
+                    ),
                     _back_keyboard(),
                 )
             except (ValueError, sqlite3.Error) as exc:

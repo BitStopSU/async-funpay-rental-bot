@@ -1,4 +1,5 @@
 import math
+from urllib.parse import parse_qs, urlsplit
 
 from config import Config
 from database import Database
@@ -7,11 +8,40 @@ from i18n import tr
 from prepare_listing import build_listing_text
 
 
-def _validated_lot_id(lot_id: str) -> int:
-    value = str(lot_id).strip()
-    if not value.isdecimal():
+def normalize_funpay_lot_id(value: str | int) -> str:
+    candidate = str(value).strip().strip("<>\"'()[]{}").rstrip(".,;!?")
+    if candidate.isdecimal():
+        return candidate
+
+    if candidate.casefold().startswith(("funpay.com/", "www.funpay.com/")):
+        candidate = f"https://{candidate}"
+    try:
+        parsed = urlsplit(candidate)
+        hostname = (parsed.hostname or "").casefold()
+        port = parsed.port
+    except ValueError:
+        hostname = ""
+        port = None
+        parsed = None
+    if (
+        not parsed
+        or parsed.scheme.casefold() != "https"
+        or hostname not in {"funpay.com", "www.funpay.com"}
+        or parsed.username
+        or parsed.password
+        or port not in (None, 443)
+        or parsed.path.rstrip("/") != "/lots/offer"
+    ):
         raise ValueError(tr("cli_lot_id_invalid"))
-    return int(value)
+
+    ids = parse_qs(parsed.query, keep_blank_values=True).get("id", [])
+    if len(ids) != 1 or not ids[0].isdecimal():
+        raise ValueError(tr("cli_lot_id_invalid"))
+    return ids[0]
+
+
+def _validated_lot_id(lot_id: str | int) -> int:
+    return int(normalize_funpay_lot_id(lot_id))
 
 
 def extract_lot_metadata(lot_fields):

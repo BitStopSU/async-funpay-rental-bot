@@ -15,6 +15,11 @@ def build_listing_text(
     if account["mmr"] is None:
         raise ValueError(tr("cli_preview_mmr_required"))
     mmr = str(account["mmr"])
+    if (
+        "mmr_source" in account.keys()
+        and account["mmr_source"] == "rank_tier_approx"
+    ):
+        mmr = f"~{mmr}"
     behavior = (
         str(account["behavior_score"])
         if account["behavior_score"] is not None

@@ -19,7 +19,7 @@ from config import Config
 from database import Database
 from funpay_session import FunPayAccount
 from i18n import tr
-from listing_sync import sync_listing
+from listing_sync import normalize_funpay_lot_id, sync_listing
 from notify import send_tg_photo
 from ticker import expiry_ticker
 
@@ -111,9 +111,7 @@ class RentalBot:
     async def register_listing(self, lot_id: str, account_id: int):
         if not self._ready.is_set():
             raise ValueError(tr("admin_menu_funpay_unavailable"))
-        lot_id = str(lot_id).strip()
-        if not lot_id.isdecimal():
-            raise ValueError(tr("cli_lot_id_invalid"))
+        lot_id = normalize_funpay_lot_id(lot_id)
         if self.db.get_lot(lot_id):
             raise ValueError(tr("cli_lot_already_registered"))
         account = self.db.get_account_listing_data(account_id)
@@ -243,7 +241,38 @@ class RentalBot:
         user_id = self.db.get_or_create_user(buyer)
 
         active = self.db.get_active_rental_by_buyer(buyer)
-        if lot["is_extension"]:
+        extension_request = None
+        if active and not lot["is_extension"]:
+            if str(active["lot_id"]) == str(lot_id):
+                extension_request = self.db.get_pending_extension_request(
+                    active["order_id"], str(chat_id)
+                )
+        recent_extension_request = None
+        if not lot["is_extension"]:
+            recent_extension_request = self.db.get_recent_extension_request(
+                str(chat_id), str(lot_id)
+            )
+        if (
+            recent_extension_request
+            and not extension_request
+            and (
+                not active
+                or str(active["lot_id"]) == str(lot_id)
+            )
+        ):
+            self.db.log(
+                "late_extension_payment_referred",
+                user_id=user_id,
+                order_id=order_id,
+                details={"lot_id": str(lot_id), "chat_id": str(chat_id)},
+                severity="warning",
+            )
+            self.db.queue_notification(
+                tr("notify_extension_unmatched", order_id=order_id)
+            )
+            await self.acc.send_message(chat_id, tr("extension_operator"))
+            return
+        if lot["is_extension"] or extension_request:
             if not active:
                 self.db.log(
                     "extension_without_active_rental", user_id=user_id,
@@ -349,8 +378,26 @@ class RentalBot:
         if message.image_link:
             await self.on_profile_screenshot(message)
             return
-        text = (message.text or "").lower().strip()
-        if text not in ("!код", "код", "guard"):
+        text = (message.text or "").strip()
+        command_parts = text.split()
+        command = (
+            command_parts[0].split("@", maxsplit=1)[0].casefold()
+            if command_parts else ""
+        )
+        if command == "/akk":
+            await self.on_available_lots_command(
+                message.chat_id, command_parts[1:]
+            )
+            return
+        if command == "/dodep":
+            if command_parts[1:]:
+                await self.acc.send_message(
+                    message.chat_id, tr("extension_command_usage")
+                )
+            else:
+                await self.on_extension_command(message.chat_id)
+            return
+        if text.casefold() not in ("!код", "код", "guard"):
             return
         rental = self.db.get_active_rental_by_chat(str(message.chat_id))
         if rental:
@@ -363,6 +410,88 @@ class RentalBot:
             account_id=rental["account_id"] if rental else None,
             order_id=rental["order_id"] if rental else None,
             details={"chat_id": str(message.chat_id)},
+        )
+
+    async def on_extension_command(self, chat_id):
+        request = self.db.create_extension_request(
+            str(chat_id), Config.EXTENSION_PAYMENT_WINDOW_MINUTES
+        )
+        if not request:
+            await self.acc.send_message(
+                chat_id, tr("extension_request_unavailable")
+            )
+            return
+        link = f"https://funpay.com/lots/offer?id={request['lot_id']}"
+        expires = datetime.fromisoformat(request["expires_at"]).strftime(
+            "%H:%M"
+        )
+        await self.acc.send_message(
+            chat_id,
+            tr(
+                "extension_payment_link",
+                link=link,
+                expires=expires,
+            ),
+        )
+
+    async def on_available_lots_command(self, chat_id, arguments):
+        lots = self.db.get_available_lots()
+        if not lots:
+            await self.acc.send_message(chat_id, tr("available_lots_empty"))
+            self.db.log(
+                "available_lots_requested",
+                details={"chat_id": str(chat_id), "count": 0},
+            )
+            return
+
+        if arguments:
+            if len(arguments) != 1 or not arguments[0].isdecimal():
+                await self.acc.send_message(chat_id, tr("available_lots_usage"))
+                return
+            lot_id = arguments[0]
+            lot = next((item for item in lots if item["lot_id"] == lot_id), None)
+            if not lot:
+                await self.acc.send_message(chat_id, tr("available_lots_changed"))
+                return
+            link = f"https://funpay.com/lots/offer?id={lot_id}"
+            await self.acc.send_message(
+                chat_id,
+                tr(
+                    "available_lot_link",
+                    lot_id=lot_id,
+                    link=link,
+                ),
+            )
+            self.db.log(
+                "available_lot_selected",
+                details={
+                    "chat_id": str(chat_id),
+                    "lot_id": str(lot["lot_id"]),
+                },
+            )
+            return
+
+        rows = [
+            tr(
+                "available_lot_row",
+                lot_id=lot["lot_id"],
+                title=" ".join(str(lot["title"]).split())[:45],
+                mmr=lot["mmr"] if lot["mmr"] is not None else "—",
+                price=f"{lot['price_per_hour']:g}",
+            )
+            for lot in lots
+        ]
+        chunks = [tr("available_lots_header")]
+        for row in rows:
+            if len(chunks[-1]) + len(row) + 1 > 3500:
+                chunks.append(tr("available_lots_continued"))
+            chunks[-1] += f"\n{row}"
+        chunks[-1] += f"\n{tr('available_lots_footer')}"
+        for chunk in chunks:
+            await self.acc.send_message(chat_id, chunk)
+        self.db.log(
+            "available_lots_requested",
+            details={"chat_id": str(chat_id), "count": len(lots)},
         )
 
     async def on_profile_screenshot(self, message):

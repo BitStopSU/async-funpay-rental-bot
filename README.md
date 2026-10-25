@@ -91,10 +91,16 @@ check `FUNPAY_GOLDEN_KEY` and sign in to FunPay again to obtain a fresh key.
    редактировать существующие лоты, но не создавать новые.
 2. Добавьте карточку аккаунта через Telegram: «Добавить аккаунт» и отправьте
    Dota ID, при желании MMR и порядочность, например `1232330009 - 10334`.
+   Карточка будет создана только если OpenDota вернёт профиль с точно таким же
+   Dota ID. Если OpenDota не найдёт профиль или будет недоступен, запись не
+   создаётся; проверьте ID или повторите позже. Dotabuff не считается
+   подтверждением, так как сайт может блокировать запросы.
+   Повторный Dota ID или SteamID64 уже имеющегося аккаунта не добавляется.
    Пароль, email-код и shared secret не нужны боту и не должны отправляться в
    Telegram. Бот не входит в Steam и не проверяет доступ.
 3. Для привязки лота к ранее добавленному аккаунту используйте в Telegram
-   «Привязать лот»: отправьте ID существующего объявления и выберите аккаунт.
+   «Привязать лот»: отправьте ID или HTTPS-ссылку существующего объявления и
+   выберите аккаунт. Название и цена берутся из лота автоматически.
    Либо выполните `python register_lot.py` локально. Вручную вводить название
    и цену при привязке не нужно.
 4. После привязки бот синхронизирует заголовок и описание при запуске и после
@@ -103,18 +109,38 @@ check `FUNPAY_GOLDEN_KEY` and sign in to FunPay again to obtain a fresh key.
    подставляется из базы, но автоматически не проверяется: источник её
    изменения не подключён. Её можно обновить в Telegram после ручной проверки
    или запустить `python update_behavior.py`.
+   Если OpenDota не вернул оценку MMR, бот использует таблицу медалей и звёзд
+   как приблизительный fallback; значение отмечается `~` в панели и тексте
+   объявления. Для Immortal и неизвестного ранга оценка не применяется.
 5. `python prepare_listing.py` оставлен как предпросмотр. Не указывайте в лоте
    логин, пароль, Steam Guard secret или коды. Заказы резервируют только
    связанный аккаунт; обработка заказа остаётся ручной.
+6. Покупатель может отправить `/akk` в FunPay-чате, чтобы увидеть свободные
+   лоты, затем `/akk <ID_лота>`, чтобы получить ссылку на выбранный лот.
+7. Во время активной аренды команда `/dodep` выдаёт ссылку на тот же лот и
+   открывает 10-минутное окно оплаты. В это время ticker удерживает аккаунт от
+   повторного назначения, но оплаченный срок не меняется. Продление происходит
+   только после подтверждённого заказа; если оплаты нет, аренда освобождается.
+   Поздняя оплата после закрытия окна передаётся оператору.
 
 Create the FunPay listing once (the installed `aioFunPayAPI` can edit existing
 listings but does not support creating them). Add an account record from Telegram
 with its Dota account ID and, optionally, MMR and behavior score, for example
-`1232330009 - 10334`. The bot does not need or accept account passwords,
-email codes, or shared secrets; it does not sign in to Steam.
+`1232330009 - 10334`. The bot checks the public profile through OpenDota and
+creates the record only if OpenDota returns a profile with the exact same Dota
+ID. If OpenDota cannot find the profile or is unavailable, the record is not
+created; check the ID or retry later. Dotabuff is not treated as confirmation
+because it may block automated requests. The bot does not need or accept
+account passwords, email codes, or shared secrets; it does not sign in to Steam.
+Duplicate Dota IDs or SteamID64 values already in the account list are rejected.
+When OpenDota has no numeric MMR estimate, the bot uses the medal/star
+`rank_tier` as an approximate fallback, visibly prefixed with `~` in the admin
+view and listing text. Immortal or unknown tiers are not estimated; a direct
+OpenDota estimate always takes precedence.
 For an account already in the database, use Telegram's “Link listing” menu to
-send the listing ID and choose the account, or run `python register_lot.py`
-locally. After linking, the bot updates
+send the numeric listing ID or HTTPS listing URL and choose the account, or run
+`python register_lot.py` locally. The title and price are fetched automatically.
+After linking, the bot updates
 the listing title and description on startup and when the daily OpenDota check
 changes MMR. The bot does not automatically change the price, but an admin can
 change it in Telegram. Behavior score is included from the database but has no
@@ -122,6 +148,13 @@ automatic data source; update it from Telegram after manual verification or run
 `python update_behavior.py`.
 `python prepare_listing.py` remains a preview. Never put credentials or Steam
 Guard codes in a listing; order fulfillment remains manual.
+In a FunPay chat, buyers can send `/akk` to see available listings and
+`/akk <listing_ID>` to receive the selected listing link.
+During an active rental, `/dodep` sends the same listing link and opens a
+10-minute payment window. The ticker keeps the account from being reassigned
+during that window, but does not change the paid rental end time. The extension
+is applied only after a confirmed paid order; otherwise the rental is released.
+Payments received after the window closes are referred to the operator.
 
 ## Rental timing / Срок аренды
 

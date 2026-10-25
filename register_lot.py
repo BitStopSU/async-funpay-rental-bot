@@ -8,14 +8,19 @@ from aioFunPayAPI.common import exceptions
 
 from database import Database
 from i18n import tr
-from listing_sync import extract_lot_metadata, fetch_funpay_lot, sync_listing
+from listing_sync import (
+    extract_lot_metadata,
+    fetch_funpay_lot,
+    normalize_funpay_lot_id,
+    sync_listing,
+)
 
 
 async def main():
     db = None
     try:
         db = Database()
-        lot_id = input(tr("cli_lot_id")).strip()
+        lot_id = normalize_funpay_lot_id(input(tr("cli_lot_id")).strip())
         if db.get_lot(lot_id):
             raise ValueError(tr("cli_lot_already_registered"))
         accounts = db.get_unlinked_accounts()

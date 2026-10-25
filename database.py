@@ -12,6 +12,14 @@ def current_time() -> datetime:
     return datetime.now()
 
 
+class DuplicateAccountError(ValueError):
+    def __init__(self, existing_account_id: int):
+        super().__init__(
+            f"Account identity already exists as account #{existing_account_id}"
+        )
+        self.existing_account_id = existing_account_id
+
+
 class Database:
     def __init__(self, path: str | None = None):
         self.conn = sqlite3.connect(
@@ -41,6 +49,7 @@ class Database:
             steamid64 TEXT,
             dota_account_id TEXT,
             mmr INTEGER,
+            mmr_source TEXT NOT NULL DEFAULT 'manual',
             behavior_score INTEGER,
             vac_banned INTEGER DEFAULT 0,
             status TEXT DEFAULT 'free',
@@ -99,6 +108,16 @@ class Database:
             order_type TEXT NOT NULL,
             processed_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS extension_requests (
+            request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rental_order_id TEXT NOT NULL REFERENCES rentals(order_id),
+            chat_id TEXT NOT NULL,
+            lot_id TEXT NOT NULL REFERENCES lots(lot_id),
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            extension_order_id TEXT
+        );
         CREATE TABLE IF NOT EXISTS screenshot_submissions (
             submission_id INTEGER PRIMARY KEY AUTOINCREMENT,
             order_id TEXT NOT NULL REFERENCES rentals(order_id),
@@ -117,6 +136,10 @@ class Database:
             ON notifications(sent, severity);
         CREATE INDEX IF NOT EXISTS idx_password_tasks_pending
             ON password_tasks(status, task_id);
+        CREATE INDEX IF NOT EXISTS idx_extension_requests_expiry
+            ON extension_requests(status, expires_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_extension_requests_pending_rental
+            ON extension_requests(rental_order_id) WHERE status = 'pending';
         """)
         # Upgrade databases created before chat binding and notification support.
         rental_columns = {
@@ -134,6 +157,13 @@ class Database:
                 "ALTER TABLE lots ADD COLUMN account_id INTEGER REFERENCES accounts(account_id)"
             )
         self._migrate_remove_account_credentials()
+        account_columns = {
+            row["name"] for row in self.conn.execute("PRAGMA table_info(accounts)")
+        }
+        if "mmr_source" not in account_columns:
+            self.conn.execute(
+                "ALTER TABLE accounts ADD COLUMN mmr_source TEXT NOT NULL DEFAULT 'manual'"
+            )
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_accounts_free ON accounts(status, mmr DESC)"
         )
@@ -162,6 +192,7 @@ class Database:
                     steamid64 TEXT,
                     dota_account_id TEXT,
                     mmr INTEGER,
+                    mmr_source TEXT NOT NULL DEFAULT 'manual',
                     behavior_score INTEGER,
                     vac_banned INTEGER DEFAULT 0,
                     status TEXT DEFAULT 'free',
@@ -172,10 +203,11 @@ class Database:
             """)
             self.conn.execute("""
                 INSERT INTO accounts_new (
-                    account_id, steamid64, dota_account_id, mmr, behavior_score,
+                    account_id, steamid64, dota_account_id, mmr, mmr_source,
+                    behavior_score,
                     vac_banned, status, auto_change_password, last_check, created_at
                 )
-                SELECT account_id, steamid64, dota_account_id, mmr,
+                SELECT account_id, steamid64, dota_account_id, mmr, 'manual',
                        behavior_score, vac_banned, status, auto_change_password,
                        last_check, created_at
                 FROM accounts
@@ -248,6 +280,7 @@ class Database:
         dota_account_id: str | None = None,
         mmr: int | None = None,
         behavior_score: int | None = None,
+        mmr_source: str = "manual",
     ) -> int:
         if not (steamid64 or dota_account_id):
             raise ValueError("A SteamID64 or Dota account ID is required")
@@ -259,19 +292,33 @@ class Database:
             raise ValueError("MMR must be between 0 and 15000")
         if behavior_score is not None and not 0 <= behavior_score <= 12000:
             raise ValueError("Behavior score must be between 0 and 12000")
+        if mmr_source not in {"manual", "opendota_estimate", "rank_tier_approx"}:
+            raise ValueError("Unsupported MMR source")
+        normalized_steamid64 = (
+            steamid64.strip() if steamid64 and steamid64.strip() else None
+        )
+        normalized_dota_id = (
+            dota_account_id.strip()
+            if dota_account_id and dota_account_id.strip()
+            else None
+        )
         with self.conn:
+            duplicate = self.find_duplicate_account(
+                dota_account_id=normalized_dota_id,
+                steamid64=normalized_steamid64,
+            )
+            if duplicate:
+                raise DuplicateAccountError(duplicate["account_id"])
             cur = self.conn.execute(
                 """INSERT INTO accounts
-                   (steamid64, dota_account_id, mmr, behavior_score, created_at)
-                   VALUES (?, ?, ?, ?, ?)""",
+                   (steamid64, dota_account_id, mmr, mmr_source,
+                    behavior_score, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
                 (
-                    steamid64.strip() if steamid64 and steamid64.strip() else None,
-                    (
-                        dota_account_id.strip()
-                        if dota_account_id and dota_account_id.strip()
-                        else None
-                    ),
+                    normalized_steamid64,
+                    normalized_dota_id,
                     mmr,
+                    mmr_source,
                     behavior_score,
                     current_time().isoformat(),
                 ),
@@ -280,9 +327,36 @@ class Database:
             self.log("account_added", account_id=account_id)
             return account_id
 
+    def find_duplicate_account(
+        self,
+        dota_account_id: str | None = None,
+        steamid64: str | None = None,
+        exclude_account_id: int | None = None,
+    ):
+        conditions = []
+        values = []
+        if dota_account_id and dota_account_id.strip():
+            conditions.append("dota_account_id = ?")
+            values.append(dota_account_id.strip())
+        if steamid64 and steamid64.strip():
+            conditions.append("steamid64 = ?")
+            values.append(steamid64.strip())
+        if not conditions:
+            return None
+        query = (
+            "SELECT account_id, dota_account_id, steamid64 FROM accounts "
+            f"WHERE ({' OR '.join(conditions)})"
+        )
+        if exclude_account_id is not None:
+            query += " AND account_id != ?"
+            values.append(exclude_account_id)
+        return self.conn.execute(
+            query + " ORDER BY account_id LIMIT 1", values
+        ).fetchone()
+
     def get_account_listing_data(self, account_id: int):
         return self.conn.execute(
-            """SELECT account_id, steamid64, dota_account_id, mmr,
+            """SELECT account_id, steamid64, dota_account_id, mmr, mmr_source,
                       behavior_score, status, vac_banned
                FROM accounts WHERE account_id = ?""",
             (account_id,),
@@ -290,7 +364,7 @@ class Database:
 
     def get_admin_editable_accounts(self):
         return self.conn.execute(
-            """SELECT account_id, steamid64, dota_account_id, mmr,
+            """SELECT account_id, steamid64, dota_account_id, mmr, mmr_source,
                       behavior_score, status, vac_banned
                FROM accounts ORDER BY account_id"""
         ).fetchall()
@@ -312,6 +386,11 @@ class Database:
                 raise ValueError("Account IDs must contain digits only")
             if field == "steamid64" and len(normalized) != 17:
                 raise ValueError("SteamID64 must contain 17 digits")
+            duplicate = self.find_duplicate_account(
+                **{field: normalized}, exclude_account_id=account_id
+            )
+            if duplicate:
+                raise DuplicateAccountError(duplicate["account_id"])
         else:
             if isinstance(value, bool) or not str(value).isdecimal():
                 raise ValueError("Value must be a non-negative integer")
@@ -321,8 +400,11 @@ class Database:
                 raise ValueError(f"{field} exceeds its supported range")
         with self.conn:
             cursor = self.conn.execute(
-                f"UPDATE accounts SET {columns[field]} = ? WHERE account_id = ?",
-                (normalized, account_id),
+                f"""UPDATE accounts SET {columns[field]} = ?,
+                    mmr_source = CASE WHEN ? = 'mmr' THEN 'manual'
+                                      ELSE mmr_source END
+                    WHERE account_id = ?""",
+                (normalized, field, account_id),
             )
             if cursor.rowcount != 1:
                 raise ValueError("Account does not exist")
@@ -531,7 +613,8 @@ class Database:
 
     def get_unlinked_accounts(self):
         return self.conn.execute(
-            """SELECT account_id, dota_account_id, mmr, behavior_score
+            """SELECT account_id, dota_account_id, mmr, mmr_source,
+                      behavior_score
                FROM accounts
                WHERE status = 'free' AND vac_banned = 0
                  AND account_id NOT IN (
@@ -545,6 +628,12 @@ class Database:
         if not value.isdecimal():
             raise ValueError("Dota account ID must be numeric")
         with self.conn:
+            duplicate = self.find_duplicate_account(
+                dota_account_id=value,
+                exclude_account_id=account_id,
+            )
+            if duplicate:
+                raise DuplicateAccountError(duplicate["account_id"])
             cursor = self.conn.execute(
                 "UPDATE accounts SET dota_account_id = ? WHERE account_id = ?",
                 (value, account_id),
@@ -560,6 +649,145 @@ class Database:
         return self.conn.execute(
             "SELECT * FROM lots WHERE account_id = ? AND is_extension = 0",
             (account_id,),
+        ).fetchone()
+
+    def get_available_lots(self):
+        return self.conn.execute(
+            """SELECT lots.lot_id, lots.title, lots.price_per_hour,
+                      accounts.mmr
+               FROM lots
+               LEFT JOIN accounts ON accounts.account_id = lots.account_id
+               WHERE lots.is_extension = 0
+                 AND lots.lot_id <> ''
+                 AND lots.lot_id NOT GLOB '*[^0-9]*'
+                 AND (
+                     (
+                         lots.account_id IS NULL
+                         AND EXISTS (
+                             SELECT 1 FROM accounts
+                             WHERE accounts.status = 'free'
+                               AND accounts.vac_banned = 0
+                               AND NOT EXISTS (
+                                   SELECT 1 FROM rentals
+                                   WHERE rentals.account_id = accounts.account_id
+                                     AND rentals.status = 'active'
+                               )
+                         )
+                     )
+                     OR (
+                         lots.account_id IS NOT NULL
+                         AND accounts.status = 'free'
+                         AND accounts.vac_banned = 0
+                         AND NOT EXISTS (
+                             SELECT 1 FROM rentals
+                             WHERE rentals.account_id = accounts.account_id
+                               AND rentals.status = 'active'
+                         )
+                     )
+                 )
+               ORDER BY lots.lot_id"""
+        ).fetchall()
+
+    def create_extension_request(
+        self, chat_id: str, window_minutes: int = 10
+    ):
+        if (
+            isinstance(window_minutes, bool)
+            or not isinstance(window_minutes, int)
+            or not 1 <= window_minutes <= 30
+        ):
+            raise ValueError("Extension payment window must be 1 to 30 minutes")
+        chat_id = str(chat_id)
+        now = current_time()
+        with self.conn:
+            rental = self.conn.execute(
+                """SELECT * FROM rentals
+                   WHERE chat_id = ? AND status = 'active'
+                   ORDER BY started_at DESC LIMIT 1""",
+                (chat_id,),
+            ).fetchone()
+            if not rental:
+                return None
+            lot = self.conn.execute(
+                """SELECT is_extension FROM lots WHERE lot_id = ?""",
+                (str(rental["lot_id"]),),
+            ).fetchone()
+            if not lot or lot["is_extension"]:
+                return None
+
+            pending = self.conn.execute(
+                """SELECT * FROM extension_requests
+                   WHERE rental_order_id = ? AND status = 'pending'
+                     AND expires_at > ?
+                   ORDER BY request_id DESC LIMIT 1""",
+                (rental["order_id"], now.isoformat()),
+            ).fetchone()
+            if pending:
+                return pending
+
+            self.conn.execute(
+                """UPDATE extension_requests SET status = 'expired'
+                   WHERE rental_order_id = ? AND status = 'pending'""",
+                (rental["order_id"],),
+            )
+            if datetime.fromisoformat(rental["ends_at"]) <= now:
+                return None
+
+            expires_at = now + timedelta(minutes=window_minutes)
+            cursor = self.conn.execute(
+                """INSERT INTO extension_requests
+                   (rental_order_id, chat_id, lot_id, created_at, expires_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    rental["order_id"],
+                    chat_id,
+                    str(rental["lot_id"]),
+                    now.isoformat(),
+                    expires_at.isoformat(),
+                ),
+            )
+            self.log(
+                "extension_payment_requested",
+                user_id=rental["user_id"],
+                account_id=rental["account_id"],
+                order_id=rental["order_id"],
+                details={
+                    "request_id": cursor.lastrowid,
+                    "lot_id": str(rental["lot_id"]),
+                    "expires_at": expires_at.isoformat(),
+                },
+            )
+            return self.conn.execute(
+                "SELECT * FROM extension_requests WHERE request_id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+
+    def get_pending_extension_request(
+        self, rental_order_id: str, chat_id: str
+    ):
+        return self.conn.execute(
+            """SELECT * FROM extension_requests
+               WHERE rental_order_id = ? AND chat_id = ? AND status = 'pending'
+                 AND expires_at > ?
+               ORDER BY request_id DESC LIMIT 1""",
+            (
+                str(rental_order_id),
+                str(chat_id),
+                current_time().isoformat(),
+            ),
+        ).fetchone()
+
+    def get_recent_extension_request(
+        self, chat_id: str, lot_id: str, age_minutes: int = 15
+    ):
+        cutoff = (current_time() - timedelta(minutes=age_minutes)).isoformat()
+        return self.conn.execute(
+            """SELECT * FROM extension_requests
+               WHERE chat_id = ? AND lot_id = ?
+                 AND status IN ('pending', 'expired')
+                 AND created_at >= ?
+               ORDER BY request_id DESC LIMIT 1""",
+            (str(chat_id), str(lot_id), cutoff),
         ).fetchone()
 
     def get_lots_for_sync(self):
@@ -644,6 +872,7 @@ class Database:
     def get_admin_accounts(self):
         return self.conn.execute(
             """SELECT accounts.account_id, accounts.status, accounts.mmr,
+                      accounts.mmr_source,
                       accounts.vac_banned, lots.lot_id
                FROM accounts LEFT JOIN lots USING (account_id)
                ORDER BY accounts.account_id"""
@@ -766,6 +995,12 @@ class Database:
                         str(extension_order_id), str(order_id), current_time().isoformat(),
                     ),
                 )
+                self.conn.execute(
+                    """UPDATE extension_requests
+                       SET status = 'paid', extension_order_id = ?
+                       WHERE rental_order_id = ? AND status = 'pending'""",
+                    (str(extension_order_id), str(order_id)),
+                )
             self.conn.execute(
                 """UPDATE users SET total_orders = total_orders + 1,
                    total_hours = total_hours + ? WHERE user_id = ?""",
@@ -784,20 +1019,40 @@ class Database:
             return new_ends
 
     def get_expired_rentals(self):
+        now = current_time().isoformat()
         return self.conn.execute(
-            "SELECT * FROM rentals WHERE status = 'active' AND ends_at <= ?",
-            (current_time().isoformat(),),
+            """SELECT * FROM rentals
+               WHERE status = 'active' AND ends_at <= ?
+                 AND NOT EXISTS (
+                     SELECT 1 FROM extension_requests
+                     WHERE extension_requests.rental_order_id = rentals.order_id
+                       AND extension_requests.status = 'pending'
+                       AND extension_requests.expires_at > ?
+                 )""",
+            (now, now),
         ).fetchall()
 
     def release_expired_rental(self, order_id: str):
         """Atomically re-check expiry, end the rental, then release its account."""
         now = current_time()
         with self.conn:
+            self.conn.execute(
+                """UPDATE extension_requests SET status = 'expired'
+                   WHERE rental_order_id = ? AND status = 'pending'
+                     AND expires_at <= ?""",
+                (str(order_id), now.isoformat()),
+            )
             rental = self.conn.execute(
                 """SELECT rentals.*, accounts.auto_change_password
                    FROM rentals JOIN accounts USING (account_id)
-                   WHERE rentals.order_id = ? AND rentals.status = 'active'""",
-                (str(order_id),),
+                   WHERE rentals.order_id = ? AND rentals.status = 'active'
+                     AND NOT EXISTS (
+                         SELECT 1 FROM extension_requests
+                         WHERE extension_requests.rental_order_id = rentals.order_id
+                           AND extension_requests.status = 'pending'
+                           AND extension_requests.expires_at > ?
+                     )""",
+                (str(order_id), now.isoformat()),
             ).fetchone()
             if not rental or datetime.fromisoformat(rental["ends_at"]) > now:
                 return None
@@ -855,7 +1110,11 @@ class Database:
                 )
         return len(rows)
 
-    def update_mmr(self, account_id: int, mmr: int | None):
+    def update_mmr(
+        self, account_id: int, mmr: int | None, source: str = "manual"
+    ):
+        if source not in {"manual", "opendota_estimate", "rank_tier_approx"}:
+            raise ValueError("Unsupported MMR source")
         if mmr is not None and (
             isinstance(mmr, bool)
             or not isinstance(mmr, int)
@@ -864,19 +1123,22 @@ class Database:
             raise ValueError("MMR must be an integer between 0 and 15000")
         with self.conn:
             row = self.conn.execute(
-                "SELECT mmr FROM accounts WHERE account_id = ?",
+                "SELECT mmr, mmr_source FROM accounts WHERE account_id = ?",
                 (account_id,),
             ).fetchone()
             if not row:
                 raise ValueError("Account does not exist")
-            changed = row["mmr"] != mmr
+            changed = row["mmr"] != mmr or row["mmr_source"] != source
             self.conn.execute(
-                "UPDATE accounts SET mmr = ?, last_check = ? WHERE account_id = ?",
-                (mmr, current_time().isoformat(), account_id),
+                """UPDATE accounts
+                   SET mmr = ?, mmr_source = ?, last_check = ?
+                   WHERE account_id = ?""",
+                (mmr, source, current_time().isoformat(), account_id),
             )
             self.log(
                 "account_mmr_checked", account_id=account_id,
-                details={"mmr": mmr},
+                details={"mmr": mmr, "source": source},
+                severity="warning" if source == "rank_tier_approx" else "info",
             )
             return changed
 

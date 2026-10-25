@@ -1,0 +1,5 @@
+aioFunPayAPI
+steam-auth-nodejs  # альтернатива для Python: steam-totp
+python-dotenv
+cryptography
+httpx

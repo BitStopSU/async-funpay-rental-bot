@@ -77,8 +77,8 @@ class RentalBot:
             update_phpsessid=True
         )
         self.runner = SessionRefreshingRunner(self.acc)
-        await self.sync_all_listings()
         self._ready.set()
+        await self.sync_all_listings()
         logger.info(tr("funpay_started"))
         ticker = asyncio.create_task(expiry_ticker(self.db), name="rental-expiry-ticker")
         try:
@@ -100,20 +100,55 @@ class RentalBot:
             await asyncio.gather(ticker, return_exceptions=True)
 
     async def sync_all_listings(self):
+        if not self._ready.is_set():
+            raise ValueError(tr("admin_menu_funpay_unavailable"))
+        updated = 0
         for lot in self.db.get_lots_for_sync():
-            await self._sync_listing(
-                lot["lot_id"], lot["account_id"]
-            )
+            updated += await self._sync_listing(lot["lot_id"], lot["account_id"])
+        return updated
+
+    async def register_listing(self, lot_id: str, account_id: int):
+        if not self._ready.is_set():
+            raise ValueError(tr("admin_menu_funpay_unavailable"))
+        lot_id = str(lot_id).strip()
+        if not lot_id.isdecimal():
+            raise ValueError(tr("cli_lot_id_invalid"))
+        if self.db.get_lot(lot_id):
+            raise ValueError(tr("cli_lot_already_registered"))
+        account = self.db.get_account_listing_data(account_id)
+        eligible_ids = {
+            row["account_id"] for row in self.db.get_unlinked_accounts()
+        }
+        if not account or account_id not in eligible_ids:
+            raise ValueError(tr("cli_lot_accounts_empty"))
+
+        lot_fields = await self.acc.get_lot_fields(int(lot_id))
+        title_ru = (lot_fields.title_ru or "").strip()
+        title_en = (lot_fields.title_en or "").strip()
+        price = lot_fields.price
+        if not title_ru and not title_en or price is None or price <= 0:
+            raise ValueError(tr("cli_lot_fetch_failed"))
+        self.db.register_lot(
+            lot_id,
+            title_ru or title_en,
+            price,
+            account_id,
+            title_en=title_en or title_ru,
+        )
+        await self._sync_listing(lot_id, account_id)
+        return lot_id
 
     async def sync_account_listing(self, account_id: int):
-        await self._ready.wait()
+        if not self._ready.is_set():
+            return False
         lot = self.db.get_lot_by_account_id(account_id)
         if lot:
-            await self._sync_listing(lot["lot_id"], account_id)
+            return await self._sync_listing(lot["lot_id"], account_id)
+        return False
 
     async def _sync_listing(self, lot_id: str, account_id: int):
         try:
-            await sync_listing(self.db, self.acc, lot_id, account_id)
+            return await sync_listing(self.db, self.acc, lot_id, account_id)
         except (
             aiohttp.ClientError,
             RequestFailedError,
@@ -136,6 +171,7 @@ class RentalBot:
                 tr("listing_sync_failed", lot_id=lot_id),
                 severity="warning",
             )
+            return False
 
     async def handle_event(self, event):
         if event.type == EventTypes.NEW_ORDER:

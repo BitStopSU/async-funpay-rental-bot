@@ -85,15 +85,28 @@ Guard codes in a listing; order fulfillment remains manual.
 перезапустите `python main.py` и отправьте боту команду `/start` в личном чате.
 Inline-меню показывает состояние базы, аккаунты, активные аренды, объявления и
 настроенные параметры (секреты не отображаются). Доступ разрешён только ID из
-`TG_ADMIN_ID`. Для добавления аккаунта меню направляет к локальной команде
-`python add_account.py`: пароль и shared secret нельзя передавать Telegram.
+`TG_ADMIN_ID`. Через меню можно привязать существующий FunPay-лот к выбранному
+свободному аккаунту, изменить вручную проверенную порядочность и запустить
+синхронизацию объявлений. ID лота, его название и цена получаются из FunPay;
+автоматически меняются только заголовок и описание. Новые MMR синхронизируются
+из OpenDota ежедневно. Новые лоты создаются на FunPay вручную один раз.
+
+Добавление аккаунта целиком через Telegram не поддерживается: пароль и shared
+secret вводятся скрыто только локальной командой `python add_account.py` и
+никогда не отправляются в Telegram. После этого управление привязкой и текстом
+объявления доступно в меню бота.
 
 Set `TG_BOT_TOKEN` and your numeric Telegram user ID in `TG_ADMIN_ID`, restart
 `python main.py`, and send `/start` to the bot in a private chat. The inline
 menu shows database status, accounts, active rentals, listings, and whether
 settings are configured without revealing secret values. Only the configured
-admin ID is accepted. Account credentials must be entered locally with
-`python add_account.py`, not sent through Telegram. Telegram long polling
+admin ID is accepted. You can link a FunPay listing to a free account, update a
+manually verified behavior score, and sync listing text from this menu. Lot IDs,
+titles, and prices are read from FunPay; only listing title and description are
+automatically changed. New MMR values sync daily from OpenDota. New listings
+must still be created manually once. New account passwords and shared secrets
+must be entered locally with `python add_account.py` using hidden input, never
+sent through Telegram. Telegram long polling
 requires that the same bot token is not already being polled by another process
 and that no webhook is configured.
 

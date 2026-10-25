@@ -30,7 +30,10 @@ async def main():
         asyncio.create_task(
             critical_notification_loop(db), name="critical-notifications"
         ),
-        asyncio.create_task(admin_menu_loop(db), name="telegram-admin-menu"),
+        asyncio.create_task(
+            admin_menu_loop(db, bot),
+            name="telegram-admin-menu",
+        ),
     ]
     try:
         await bot.start()

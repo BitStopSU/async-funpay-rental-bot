@@ -244,7 +244,8 @@ class Database:
 
     def get_account_listing_data(self, account_id: int):
         return self.conn.execute(
-            """SELECT account_id, mmr, behavior_score, status, vac_banned
+            """SELECT account_id, dota_account_id, mmr, behavior_score,
+                      status, vac_banned
                FROM accounts WHERE account_id = ?""",
             (account_id,),
         ).fetchone()

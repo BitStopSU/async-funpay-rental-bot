@@ -287,6 +287,9 @@ _MESSAGES = {
         "admin_menu_add_account": "➕ Добавить аккаунт",
         "admin_menu_listing_text": "📝 Текст объявления",
         "admin_menu_settings": "⚙️ Настройки",
+        "admin_menu_link_lot": "🔗 Привязать лот",
+        "admin_menu_update_behavior": "🤝 Обновить порядочность",
+        "admin_menu_sync_listings": "🔄 Обновить лоты",
         "admin_menu_open": "Откройте раздел:",
         "admin_menu_unauthorized": "Это меню доступно только администратору.",
         "admin_menu_status_text": (
@@ -322,13 +325,71 @@ _MESSAGES = {
             "Секреты нельзя безопасно вводить в Telegram. На компьютере, где "
             "находится база бота, выполните `python add_account.py`. Пароль и "
             "shared secret вводятся скрыто и сохраняются зашифрованными. "
-            "Затем создайте объявление вручную в FunPay и привяжите его через "
-            "`python register_lot.py`."
+            "Создайте лот в FunPay один раз; затем здесь выберите «Привязать "
+            "лот». Повторно запускать register_lot.py не нужно."
         ),
         "admin_menu_listing_text": (
-            "Для предпросмотра заголовка и описания выполните на компьютере "
-            "с базой `python prepare_listing.py`. Используются только вручную "
-            "введённые MMR/порядочность; вход в Steam и публикация не выполняются."
+            "Текущие значения MMR/порядочности и связанные лоты:\n"
+            "{stats}\n\n"
+            "MMR обновляется по OpenDota; после изменения заголовок и описание "
+            "лота обновятся автоматически. Для ручного изменения порядочности "
+            "нажмите «Обновить порядочность»."
+        ),
+        "admin_menu_link_enter_lot": (
+            "Отправьте ID уже созданного лота FunPay. Название и цена будут "
+            "получены автоматически; цену бот не меняет."
+        ),
+        "admin_menu_link_no_accounts": (
+            "Нет свободных аккаунтов без привязанного лота. Добавьте аккаунт "
+            "локально через add_account.py, не отправляя Steam-секреты в Telegram."
+        ),
+        "admin_menu_link_choose_account": (
+            "Выберите свободный аккаунт для этого лота:"
+        ),
+        "admin_menu_dota_enter": (
+            "Для автоматического MMR введите цифровой ID аккаунта Dota "
+            "для аккаунта #{account_id}."
+        ),
+        "admin_menu_linked": (
+            "Лот {lot_id} привязан к аккаунту #{account_id}. Заголовок и описание "
+            "синхронизируются автоматически."
+        ),
+        "admin_menu_behavior_choose": (
+            "Выберите аккаунт, для которого вручную проверена новая порядочность:"
+        ),
+        "admin_menu_behavior_enter": (
+            "Введите проверенное значение порядочности для аккаунта #{account_id} "
+            "(целое число от 0 до 12000)."
+        ),
+        "admin_menu_behavior_invalid": (
+            "Введите целое число от 0 до 12000. Для отмены отправьте /cancel."
+        ),
+        "admin_menu_behavior_saved": (
+            "Порядочность сохранена; привязанный лот обновлён."
+        ),
+        "admin_menu_behavior_saved_pending": (
+            "Порядочность сохранена. Если лот привязан, он будет синхронизирован "
+            "при восстановлении соединения с FunPay."
+        ),
+        "admin_menu_sync_done": (
+            "Синхронизация завершена. Обновлено лотов: {updated}."
+        ),
+        "admin_menu_funpay_unavailable": (
+            "FunPay ещё не подключён. Дождитесь соединения и повторите."
+        ),
+        "admin_menu_action_expired": (
+            "Действие отменено или устарело. Откройте нужный пункт меню заново."
+        ),
+        "admin_menu_cancelled": "Действие отменено.",
+        "admin_menu_operation_failed": (
+            "Не удалось выполнить действие в админ-меню (%s)"
+        ),
+        "admin_menu_operation_failed_text": (
+            "Действие не выполнено. Проверьте ID лота, подключение FunPay и "
+            "состояние аккаунта."
+        ),
+        "admin_menu_listing_stats": (
+            "Лот {lot_id}; аккаунт #{account_id}; MMR: {mmr}; порядочность: {behavior}"
         ),
         "admin_menu_settings_text": (
             "Настройки (значения секретов скрыты):\n"
@@ -617,6 +678,9 @@ _MESSAGES = {
         "admin_menu_add_account": "➕ Add account",
         "admin_menu_listing_text": "📝 Listing text",
         "admin_menu_settings": "⚙️ Settings",
+        "admin_menu_link_lot": "🔗 Link listing",
+        "admin_menu_update_behavior": "🤝 Update behavior",
+        "admin_menu_sync_listings": "🔄 Sync listings",
         "admin_menu_open": "Choose a section:",
         "admin_menu_unauthorized": "This menu is available to the administrator only.",
         "admin_menu_status_text": (
@@ -651,15 +715,70 @@ _MESSAGES = {
         "admin_menu_add_account_text": (
             "Secrets cannot be safely entered through Telegram. On the computer "
             "hosting the bot database, run `python add_account.py`. Password and "
-            "shared secret are hidden during input and stored encrypted. Then "
-            "create the listing manually on FunPay and link it with "
-            "`python register_lot.py`."
+            "shared secret are hidden during input and stored encrypted. Create "
+            "the FunPay listing once, then use “Link listing” here."
         ),
         "admin_menu_listing_text": (
-            "To preview the listing title and description, run "
-            "`python prepare_listing.py` on the computer hosting the database. "
-            "Only manually entered MMR/behavior data is used; there is no Steam "
-            "sign-in or publication."
+            "Current MMR/behavior values and linked listings:\n"
+            "{stats}\n\n"
+            "MMR is updated through OpenDota; the listing title and description "
+            "then sync automatically. Use “Update behavior” to set a manually "
+            "verified behavior score."
+        ),
+        "admin_menu_link_enter_lot": (
+            "Send the ID of an existing FunPay listing. Its title and price will "
+            "be fetched automatically; the bot does not change the price."
+        ),
+        "admin_menu_link_no_accounts": (
+            "No free unlinked accounts. Add an account locally with "
+            "add_account.py; do not send Steam secrets through Telegram."
+        ),
+        "admin_menu_link_choose_account": (
+            "Choose a free account to link to this listing:"
+        ),
+        "admin_menu_dota_enter": (
+            "Enter the numeric Dota account ID for account #{account_id} "
+            "to enable automatic MMR updates."
+        ),
+        "admin_menu_linked": (
+            "Listing {lot_id} linked to account #{account_id}. Its title and "
+            "description will sync automatically."
+        ),
+        "admin_menu_behavior_choose": (
+            "Choose the account whose behavior score you manually verified:"
+        ),
+        "admin_menu_behavior_enter": (
+            "Enter the verified behavior score for account #{account_id} "
+            "(whole number from 0 to 12000)."
+        ),
+        "admin_menu_behavior_invalid": (
+            "Enter a whole number from 0 to 12000. Send /cancel to abort."
+        ),
+        "admin_menu_behavior_saved": (
+            "Behavior score saved; the linked listing was updated."
+        ),
+        "admin_menu_behavior_saved_pending": (
+            "Behavior score saved. If a listing is linked, it will sync when "
+            "the FunPay connection is available."
+        ),
+        "admin_menu_sync_done": (
+            "Synchronization complete. Listings updated: {updated}."
+        ),
+        "admin_menu_funpay_unavailable": (
+            "FunPay is not connected yet. Wait for the connection and retry."
+        ),
+        "admin_menu_action_expired": (
+            "This action was cancelled or expired. Start it again from the menu."
+        ),
+        "admin_menu_cancelled": "Action cancelled.",
+        "admin_menu_operation_failed": (
+            "Admin menu operation failed (%s)"
+        ),
+        "admin_menu_operation_failed_text": (
+            "Action failed. Check the listing ID, FunPay connection, and account status."
+        ),
+        "admin_menu_listing_stats": (
+            "Listing {lot_id}; account #{account_id}; MMR: {mmr}; behavior: {behavior}"
         ),
         "admin_menu_settings_text": (
             "Settings (secret values are hidden):\n"

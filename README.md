@@ -38,6 +38,11 @@ Dota ID and optional public game statistics.
 Для запуска нужен установленный Python 3.10 или новее; при первом запуске
 создаются виртуальное окружение и `.env`. В `.env` нужно указать настройки
 Telegram и FunPay.
+Если обновляете уже работающего бота, установщик по умолчанию ставит программу
+в отдельную папку и создаст новую базу данных. Чтобы сохранить аккаунты и
+активные аренды, до первого запуска укажите в `.env` полный путь к прежнему
+`rental.db` в `DB_PATH` либо выберите прежнюю папку установки. Остановите
+старый процесс перед запуском новой версии.
 
 GitHub Packages does not host arbitrary `.exe` files, so the installer is
 distributed from **Releases**. Push a version tag such as `v1.0.0` to GitHub;
@@ -46,6 +51,11 @@ release. The installer places the files in the user's profile and creates
 Start-menu and optional desktop shortcuts. Python 3.10 or newer must already be
 installed. The first launch creates a virtual environment and `.env`; configure
 the Telegram and FunPay settings there.
+When updating an existing bot, the installer defaults to a separate folder and
+would create a new database. To keep accounts and active rentals, set `DB_PATH`
+in `.env` to the full path of the existing `rental.db` before the first launch,
+or choose the previous installation folder. Stop the old process before starting
+the new version.
 
 Не добавляйте секреты в этот файл или в систему контроля версий. Автоматическое
 получение Steam/email-кодов, вход в аккаунты и смена паролей не поддерживаются;

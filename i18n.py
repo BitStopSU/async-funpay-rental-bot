@@ -90,6 +90,31 @@ _MESSAGES = {
             "Не удалось выполнить ежедневные проверки аккаунтов (%s)"
         ),
         "steam_response_invalid": "В ответе Steam отсутствует список игроков",
+        "cli_add_login": "Логин Steam: ",
+        "cli_add_password": "Пароль Steam (ввод скрыт): ",
+        "cli_add_shared_secret": "Shared secret (ввод скрыт): ",
+        "cli_add_steamid": "SteamID64 (необязательно): ",
+        "cli_add_dota_id": "ID аккаунта Dota (необязательно): ",
+        "cli_add_mmr": "Текущий MMR (необязательно): ",
+        "cli_add_mmr_invalid": "MMR должен быть целым неотрицательным числом",
+        "cli_add_success": (
+            "Аккаунт добавлен с локальным ID {account_id}. Секреты не отображались."
+        ),
+        "cli_add_next": (
+            "Создайте объявление вручную в FunPay, затем запустите register_lot.py "
+            "для привязки объявления к аккаунту."
+        ),
+        "cli_add_failed": "Не удалось добавить аккаунт: {error}",
+        "cli_lot_id": "ID лота FunPay: ",
+        "cli_lot_title": "Точное название объявления (используется для сопоставления заказа): ",
+        "cli_lot_price": "Цена за час аренды: ",
+        "cli_lot_account": "Локальный ID аккаунта из add_account.py: ",
+        "cli_lot_invalid": "Цена должна быть числом, а ID аккаунта — целым числом",
+        "cli_lot_success": (
+            "Объявление зарегистрировано. Заказ с него зарезервирует только "
+            "связанный аккаунт."
+        ),
+        "cli_lot_failed": "Не удалось зарегистрировать объявление: {error}",
     },
     "en": {
         "order_already_registered": "This order has already been registered.",
@@ -169,6 +194,29 @@ _MESSAGES = {
         "daily_mmr_failed": "OpenDota MMR check failed for account #%s (%s)",
         "daily_checks_failed": "Daily account checks failed (%s)",
         "steam_response_invalid": "Steam bans response has no players list",
+        "cli_add_login": "Steam account login: ",
+        "cli_add_password": "Steam password (input hidden): ",
+        "cli_add_shared_secret": "Shared secret (input hidden): ",
+        "cli_add_steamid": "SteamID64 (optional): ",
+        "cli_add_dota_id": "Dota account ID (optional): ",
+        "cli_add_mmr": "Current MMR (optional): ",
+        "cli_add_mmr_invalid": "MMR must be a non-negative whole number",
+        "cli_add_success": "Account added with local ID {account_id}. Secrets were not displayed.",
+        "cli_add_next": (
+            "Create its FunPay listing manually, then run register_lot.py "
+            "to bind the listing to this account."
+        ),
+        "cli_add_failed": "Could not add account: {error}",
+        "cli_lot_id": "FunPay lot ID: ",
+        "cli_lot_title": "Exact listing title (used to match orders): ",
+        "cli_lot_price": "Price per rental hour: ",
+        "cli_lot_account": "Local account ID from add_account.py: ",
+        "cli_lot_invalid": "Price must be numeric and account ID must be an integer",
+        "cli_lot_success": (
+            "Listing registered. Paid orders for this listing will reserve only "
+            "its linked account."
+        ),
+        "cli_lot_failed": "Could not register listing: {error}",
     },
 }
 

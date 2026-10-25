@@ -1,4 +1,5 @@
 import json
+import math
 import sqlite3
 from datetime import datetime, timedelta
 from typing import Any
@@ -60,7 +61,8 @@ class Database:
             lot_id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             price_per_hour REAL NOT NULL,
-            is_extension INTEGER DEFAULT 0
+            is_extension INTEGER DEFAULT 0,
+            account_id INTEGER REFERENCES accounts(account_id)
         );
         CREATE TABLE IF NOT EXISTS rentals (
             order_id TEXT PRIMARY KEY,
@@ -118,6 +120,13 @@ class Database:
         }
         if "chat_id" not in rental_columns:
             self.conn.execute("ALTER TABLE rentals ADD COLUMN chat_id TEXT")
+        lot_columns = {
+            row["name"] for row in self.conn.execute("PRAGMA table_info(lots)")
+        }
+        if "account_id" not in lot_columns:
+            self.conn.execute(
+                "ALTER TABLE lots ADD COLUMN account_id INTEGER REFERENCES accounts(account_id)"
+            )
         self.conn.commit()
 
     def close(self):
@@ -159,6 +168,57 @@ class Database:
                ORDER BY mmr DESC LIMIT 1""",
             (min_mmr,),
         ).fetchone()
+
+    def get_free_account_for_lot(self, lot_id: str, min_mmr: int = 0):
+        lot = self.get_lot(lot_id)
+        if not lot:
+            return None
+        if lot["account_id"] is None:
+            return self.get_free_account(min_mmr)
+        return self.conn.execute(
+            """SELECT * FROM accounts
+               WHERE account_id = ? AND status = 'free' AND vac_banned = 0
+                 AND mmr >= ?
+                 AND NOT EXISTS (
+                     SELECT 1 FROM rentals
+                     WHERE rentals.account_id = accounts.account_id
+                       AND rentals.status = 'active'
+                 )""",
+            (lot["account_id"], min_mmr),
+        ).fetchone()
+
+    def add_account(
+        self,
+        login: str,
+        password: str,
+        shared_secret: str,
+        steamid64: str | None = None,
+        dota_account_id: str | None = None,
+        mmr: int | None = None,
+    ) -> int:
+        if not login.strip() or not password or not shared_secret:
+            raise ValueError("Login, password, and shared secret are required")
+        with self.conn:
+            cur = self.conn.execute(
+                """INSERT INTO accounts
+                   (login, password_enc, shared_secret_enc, steamid64,
+                    dota_account_id, mmr, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    login.strip(), self.encrypt(password), self.encrypt(shared_secret),
+                    steamid64.strip() if steamid64 and steamid64.strip() else None,
+                    (
+                        dota_account_id.strip()
+                        if dota_account_id and dota_account_id.strip()
+                        else None
+                    ),
+                    mmr,
+                    current_time().isoformat(),
+                ),
+            )
+            account_id = cur.lastrowid
+            self.log("account_added", account_id=account_id)
+            return account_id
 
     def set_account_status(self, account_id: int, status: str):
         if status not in {"free", "rented", "banned", "maintenance"}:
@@ -209,6 +269,55 @@ class Database:
             (title.strip(),),
         ).fetchone()
 
+    def register_lot(
+        self,
+        lot_id: str,
+        title: str,
+        price_per_hour: float,
+        account_id: int,
+    ):
+        if not str(lot_id).strip() or not title.strip():
+            raise ValueError("Lot ID and title are required")
+        if float(price_per_hour) <= 0:
+            raise ValueError("Hourly price must be positive")
+        if not math.isfinite(float(price_per_hour)):
+            raise ValueError("Hourly price must be finite")
+        with self.conn:
+            account = self.conn.execute(
+                "SELECT account_id FROM accounts WHERE account_id = ?",
+                (account_id,),
+            ).fetchone()
+            if not account:
+                raise ValueError("Account does not exist")
+            existing = self.conn.execute(
+                "SELECT account_id FROM lots WHERE lot_id = ?",
+                (str(lot_id).strip(),),
+            ).fetchone()
+            if existing:
+                raise ValueError("This FunPay lot is already registered")
+            duplicate_title = self.conn.execute(
+                "SELECT 1 FROM lots WHERE title = ? COLLATE NOCASE",
+                (title.strip(),),
+            ).fetchone()
+            if duplicate_title:
+                raise ValueError("Listing title must be unique for order matching")
+            already_linked = self.conn.execute(
+                "SELECT lot_id FROM lots WHERE account_id = ?",
+                (account_id,),
+            ).fetchone()
+            if already_linked:
+                raise ValueError("This account already has a registered lot")
+            self.conn.execute(
+                """INSERT INTO lots (lot_id, title, price_per_hour, is_extension, account_id)
+                   VALUES (?, ?, ?, 0, ?)""",
+                (str(lot_id).strip(), title.strip(), float(price_per_hour), account_id),
+            )
+            self.log(
+                "account_lot_registered",
+                account_id=account_id,
+                details={"lot_id": str(lot_id).strip()},
+            )
+
     def create_rental(
         self, order_id, user_id, account_id, lot_id, quantity, buyer_nick,
         chat_id=None,
@@ -237,6 +346,12 @@ class Database:
                 or account["vac_banned"] or account["has_active_rental"]
             ):
                 raise ValueError("Account is not available")
+            lot = self.get_lot(str(lot_id))
+            if not lot or (
+                lot["account_id"] is not None
+                and lot["account_id"] != int(account_id)
+            ):
+                raise ValueError("Account is not assigned to this lot")
             self.conn.execute(
                 """INSERT INTO rentals
                    (order_id, user_id, account_id, lot_id, quantity, started_at,

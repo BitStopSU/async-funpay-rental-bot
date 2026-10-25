@@ -205,7 +205,7 @@ class RentalBot:
             )
             return
 
-        account = self.db.get_free_account()
+        account = self.db.get_free_account_for_lot(str(lot_id))
         if not account:
             self.db.log(
                 "no_free_account", user_id=user_id, order_id=order_id,

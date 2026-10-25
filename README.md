@@ -40,3 +40,25 @@ FunPay during authentication. If FunPay rejects a session cookie as stale, the
 bot refreshes its session data and retries the request once, at most once per
 minute. If the error persists,
 check `FUNPAY_GOLDEN_KEY` and sign in to FunPay again to obtain a fresh key.
+
+## Добавление аккаунтов и объявлений / Accounts and listings
+
+1. Запустите `python add_account.py`. Пароль и shared secret вводятся скрыто
+   и шифруются Fernet перед сохранением в локальную SQLite-базу.
+2. Создайте объявление вручную в FunPay. В текущей версии `aioFunPayAPI` есть
+   редактирование лота, но нет поддерживаемого метода создания нового лота.
+   Не указывайте в объявлении логин, пароль, Steam Guard secret или коды.
+3. Запустите `python register_lot.py` и укажите ID лота, точное уникальное
+   название, почасовую цену и локальный ID аккаунта из первого шага.
+4. Для каждого аккаунта повторите шаги. Оплаченный заказ с привязанного лота
+   зарезервирует только соответствующий свободный аккаунт. Заказ всё равно
+   требует ручного выполнения; бот не входит в Steam и не передаёт секреты.
+
+Run `python add_account.py` to add an account; password and shared secret are
+hidden during entry and encrypted before storage. Create the FunPay listing
+manually (the installed `aioFunPayAPI` supports editing existing lots, not
+creating new ones), then run `python register_lot.py` to bind its ID, exact
+unique title, hourly price, and local account ID. Never put credentials or
+Steam Guard codes in a listing. Paid orders reserve only the linked account,
+but fulfillment remains manual; the bot does not sign in to Steam or disclose
+secrets.

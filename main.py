@@ -15,6 +15,9 @@ async def main():
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # HTTP client request logs include the bot API URL, which contains its token.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     db = Database()
     bot = RentalBot(Config.GOLDEN_KEY, db)
     workers = [

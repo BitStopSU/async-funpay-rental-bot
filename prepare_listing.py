@@ -3,21 +3,28 @@
 import math
 import sqlite3
 
+from config import Config
 from database import Database
-from i18n import tr
+from i18n import tr, tr_in
 
 
-def build_listing_text(account, hourly_price: float) -> tuple[str, str]:
+def build_listing_text(
+    account, hourly_price: float, language: str | None = None
+) -> tuple[str, str]:
+    language = language or Config.BOT_LANGUAGE
     if account["mmr"] is None:
         raise ValueError(tr("cli_preview_mmr_required"))
     mmr = str(account["mmr"])
     behavior = (
         str(account["behavior_score"])
         if account["behavior_score"] is not None
-        else tr("listing_behavior_unknown")
+        else tr_in(language, "listing_behavior_unknown")
     )
-    title = tr("listing_title_template", mmr=mmr, behavior=behavior)
-    description = tr(
+    title = tr_in(
+        language, "listing_title_template", mmr=mmr, behavior=behavior
+    )
+    description = tr_in(
+        language,
         "listing_description_template",
         mmr=mmr,
         behavior=behavior,

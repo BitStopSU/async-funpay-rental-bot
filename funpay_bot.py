@@ -4,40 +4,26 @@ import sqlite3
 from datetime import datetime
 from urllib.parse import urlsplit
 
+import aiohttp
 import httpx
-from aioFunPayAPI import Account, Runner
+from aioFunPayAPI import Runner
 from aioFunPayAPI.common.enums import EventTypes, OrderStatuses
-from aioFunPayAPI.common.exceptions import RequestFailedError
+from aioFunPayAPI.common.exceptions import (
+    LotSavingError,
+    RequestFailedError,
+    UnauthorizedError,
+)
 
 from config import Config
 from database import Database
+from funpay_session import FunPayAccount
 from i18n import tr
+from listing_sync import sync_listing
 from notify import send_tg_photo
 from ticker import expiry_ticker
 
 logger = logging.getLogger(__name__)
 SESSION_REFRESH_COOLDOWN = 60
-
-
-class FunPayAccount(Account):
-    """Keep the additional session cookie required by FunPay's event endpoint."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.golden_seal = None
-
-    async def method(self, *args, **kwargs):
-        response = await super().method(*args, **kwargs)
-        self.golden_seal = response.get_dict().get("golden_seal") or self.golden_seal
-        return response
-
-    async def get(self, update_phpsessid: bool = False):
-        await super().get(update_phpsessid=update_phpsessid)
-        if self.phpsessid and self.golden_seal:
-            self.phpsessid = (
-                f"{self.phpsessid}; golden_seal={self.golden_seal}"
-            )
-        return self
 
 
 class SessionRefreshingRunner(Runner):
@@ -82,6 +68,7 @@ class RentalBot:
         self.runner = None
         self.golden_key = golden_key
         self.db = db
+        self._ready = asyncio.Event()
 
     async def start(self):
         if not self.golden_key:
@@ -90,6 +77,8 @@ class RentalBot:
             update_phpsessid=True
         )
         self.runner = SessionRefreshingRunner(self.acc)
+        await self.sync_all_listings()
+        self._ready.set()
         logger.info(tr("funpay_started"))
         ticker = asyncio.create_task(expiry_ticker(self.db), name="rental-expiry-ticker")
         try:
@@ -109,6 +98,44 @@ class RentalBot:
         finally:
             ticker.cancel()
             await asyncio.gather(ticker, return_exceptions=True)
+
+    async def sync_all_listings(self):
+        for lot in self.db.get_lots_for_sync():
+            await self._sync_listing(
+                lot["lot_id"], lot["account_id"]
+            )
+
+    async def sync_account_listing(self, account_id: int):
+        await self._ready.wait()
+        lot = self.db.get_lot_by_account_id(account_id)
+        if lot:
+            await self._sync_listing(lot["lot_id"], account_id)
+
+    async def _sync_listing(self, lot_id: str, account_id: int):
+        try:
+            await sync_listing(self.db, self.acc, lot_id, account_id)
+        except (
+            aiohttp.ClientError,
+            RequestFailedError,
+            UnauthorizedError,
+            LotSavingError,
+            ValueError,
+        ) as exc:
+            logger.error(
+                "%s (%s)",
+                tr("listing_sync_failed", lot_id=lot_id),
+                type(exc).__name__,
+            )
+            self.db.log(
+                "listing_sync_failed",
+                account_id=account_id,
+                details={"lot_id": str(lot_id), "error_type": type(exc).__name__},
+                severity="error",
+            )
+            self.db.queue_notification(
+                tr("listing_sync_failed", lot_id=lot_id),
+                severity="warning",
+            )
 
     async def handle_event(self, event):
         if event.type == EventTypes.NEW_ORDER:

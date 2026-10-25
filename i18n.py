@@ -145,18 +145,82 @@ _MESSAGES = {
         ),
         "cli_add_steamid": "SteamID64 (необязательно): ",
         "cli_add_dota_id": "ID аккаунта Dota (необязательно): ",
+        "cli_add_dota_required": (
+            "Для автоматического обновления MMR укажите ID аккаунта Dota."
+        ),
+        "cli_add_dota_invalid": "ID аккаунта Dota должен состоять из цифр",
         "cli_add_mmr": "Текущий MMR (необязательно): ",
         "cli_add_behavior": "Порядочность (необязательно): ",
+        "cli_add_lot_id": (
+            "ID уже созданного лота FunPay для этого аккаунта "
+            "(Enter — привязать позже): "
+        ),
+        "cli_lot_account_choice": (
+            "Локальный ID аккаунта для привязки к этому лоту: "
+        ),
+        "cli_lot_accounts_empty": (
+            "Нет свободных аккаунтов без привязанного лота. Сначала добавьте "
+            "аккаунт через add_account.py."
+        ),
+        "cli_lot_accounts_header": (
+            "Свободные аккаунты без лота (локальный ID / Dota ID / MMR / "
+            "порядочность):"
+        ),
+        "cli_lot_id_invalid": "ID лота должен быть числом",
+        "cli_lot_already_registered": "Этот лот уже привязан к аккаунту",
+        "cli_lot_fetch_failed": (
+            "Не удалось получить данные лота FunPay. Проверьте ID и "
+            "FUNPAY_GOLDEN_KEY."
+        ),
+        "cli_lot_link_success": (
+            "Лот {lot_id} автоматически привязан к аккаунту #{account_id}; "
+            "название и цена получены из FunPay."
+        ),
+        "listing_sync_failed": (
+            "Не удалось обновить объявление {lot_id}; проверьте сессию FunPay."
+        ),
+        "listing_sync_missing_mmr": (
+            "Лот {lot_id} не обновлён: для аккаунта #{account_id} пока нет MMR."
+        ),
+        "cli_listing_sync_failed": (
+            "Не удалось синхронизировать объявление: {error}"
+        ),
+        "cli_listing_link_prompt": (
+            "Связать с лотом сейчас? Введите его ID или нажмите Enter: "
+        ),
+        "cli_listing_sync_enabled": (
+            "Заголовок и описание лота будут автоматически обновляться по "
+            "данным аккаунта."
+        ),
         "cli_add_mmr_invalid": "MMR должен быть целым неотрицательным числом",
         "cli_add_behavior_invalid": (
             "Порядочность должна быть целым неотрицательным числом"
+        ),
+        "cli_behavior_account": "Локальный ID аккаунта: ",
+        "cli_behavior_value": "Новая порядочность после ручной проверки: ",
+        "cli_behavior_invalid": (
+            "Порядочность должна быть целым неотрицательным числом"
+        ),
+        "cli_behavior_updated": (
+            "Порядочность сохранена в базе."
+        ),
+        "cli_behavior_listing_updated": (
+            "Заголовок и описание привязанного лота автоматически обновлены."
+        ),
+        "cli_behavior_waiting_mmr": (
+            "Лот привязан, но MMR пока неизвестен. После первой оценки OpenDota "
+            "бот заполнит объявление автоматически."
+        ),
+        "cli_behavior_update_failed": (
+            "Значение сохранено в базе, но лот {lot_id} не обновлён. "
+            "Проверьте сессию FunPay; бот повторит синхронизацию при запуске."
         ),
         "cli_add_success": (
             "Аккаунт добавлен с локальным ID {account_id}. Секреты не отображались."
         ),
         "cli_add_next": (
-            "Создайте объявление вручную в FunPay, затем запустите register_lot.py "
-            "для привязки объявления к аккаунту."
+            "Создайте лот в FunPay и выполните python register_lot.py, чтобы "
+            "привязать его к этому аккаунту."
         ),
         "cli_add_failed": "Не удалось добавить аккаунт: {error}",
         "cli_lot_id": "ID лота FunPay: ",
@@ -181,9 +245,9 @@ _MESSAGES = {
         "cli_preview_title": "Заголовок:",
         "cli_preview_description": "Описание:",
         "cli_preview_publish_warning": (
-            "Это только предпросмотр: текст автоматически не публикуется. "
-            "Создайте лот вручную в FunPay, затем привяжите его через "
-            "python register_lot.py."
+            "Это только предпросмотр. Создайте лот в FunPay один раз и привяжите "
+            "его через python register_lot.py; после привязки бот синхронизирует "
+            "заголовок и описание."
         ),
         "cli_preview_failed": "Не удалось подготовить текст: {error}",
         "listing_title_template": (
@@ -196,8 +260,8 @@ _MESSAGES = {
             "📊 MMR: {mmr}\n"
             "🤝 Порядочность: {behavior}\n"
             "💰 Цена: {price} за час\n"
-            "Значения указаны оператором вручную, могут измениться и не "
-            "проверяются автоматически.\n\n"
+            "MMR обновляется автоматически по оценке OpenDota. Порядочность "
+            "указана оператором вручную; фактические значения могут измениться.\n\n"
             "⚠️ Выберите нужное количество часов при оплате: например, 1 "
             "единица — 1 час, 3 единицы — 3 часа.\n"
             "После покупки заказ обрабатывается оператором вручную. "
@@ -424,14 +488,71 @@ _MESSAGES = {
         ),
         "cli_add_steamid": "SteamID64 (optional): ",
         "cli_add_dota_id": "Dota account ID (optional): ",
+        "cli_add_dota_required": (
+            "Enter the Dota account ID to enable automatic MMR updates."
+        ),
+        "cli_add_dota_invalid": "Dota account ID must contain digits only",
         "cli_add_mmr": "Current MMR (optional): ",
         "cli_add_behavior": "Behavior score (optional): ",
+        "cli_add_lot_id": (
+            "ID of the existing FunPay listing for this account "
+            "(Enter to link later): "
+        ),
+        "cli_lot_account_choice": "Local account ID to link to this listing: ",
+        "cli_lot_accounts_empty": (
+            "No free unlinked accounts. Add an account first with add_account.py."
+        ),
+        "cli_lot_accounts_header": (
+            "Free unlinked accounts (local ID / Dota ID / MMR / behavior score):"
+        ),
+        "cli_lot_id_invalid": "Listing ID must be numeric",
+        "cli_lot_already_registered": "This listing is already linked to an account",
+        "cli_lot_fetch_failed": (
+            "Could not fetch the FunPay listing. Check its ID and FUNPAY_GOLDEN_KEY."
+        ),
+        "cli_lot_link_success": (
+            "Listing {lot_id} linked to account #{account_id}; title and price "
+            "were fetched from FunPay."
+        ),
+        "listing_sync_failed": (
+            "Could not update listing {lot_id}; check the FunPay session."
+        ),
+        "listing_sync_missing_mmr": (
+            "Listing {lot_id} not updated: account #{account_id} has no MMR yet."
+        ),
+        "cli_listing_sync_failed": (
+            "Could not sync the listing: {error}"
+        ),
+        "cli_listing_link_prompt": (
+            "Link a listing now? Enter its ID or press Enter: "
+        ),
+        "cli_listing_sync_enabled": (
+            "The listing title and description will update automatically from "
+            "account data."
+        ),
         "cli_add_mmr_invalid": "MMR must be a non-negative whole number",
         "cli_add_behavior_invalid": "Behavior score must be a non-negative whole number",
+        "cli_behavior_account": "Local account ID: ",
+        "cli_behavior_value": "New behavior score after manual verification: ",
+        "cli_behavior_invalid": "Behavior score must be a non-negative whole number",
+        "cli_behavior_updated": (
+            "Behavior score saved to the database."
+        ),
+        "cli_behavior_listing_updated": (
+            "The linked listing title and description were updated automatically."
+        ),
+        "cli_behavior_waiting_mmr": (
+            "The listing is linked, but MMR is not known yet. OpenDota will "
+            "populate the listing after the first estimate."
+        ),
+        "cli_behavior_update_failed": (
+            "Value saved to the database, but listing {lot_id} was not updated. "
+            "Check the FunPay session; the bot will retry on startup."
+        ),
         "cli_add_success": "Account added with local ID {account_id}. Secrets were not displayed.",
         "cli_add_next": (
-            "Create its FunPay listing manually, then run register_lot.py "
-            "to bind the listing to this account."
+            "Create the FunPay listing and run python register_lot.py to link "
+            "it to this account."
         ),
         "cli_add_failed": "Could not add account: {error}",
         "cli_lot_id": "FunPay lot ID: ",
@@ -456,8 +577,8 @@ _MESSAGES = {
         "cli_preview_title": "Title:",
         "cli_preview_description": "Description:",
         "cli_preview_publish_warning": (
-            "Preview only: this text is not published automatically. Create the "
-            "listing manually on FunPay, then link it with python register_lot.py."
+            "Preview only. Create the listing once on FunPay and link it with "
+            "python register_lot.py; the bot will then sync its title and description."
         ),
         "cli_preview_failed": "Could not prepare listing text: {error}",
         "listing_title_template": (
@@ -470,8 +591,8 @@ _MESSAGES = {
             "📊 MMR: {mmr}\n"
             "🤝 Behavior score: {behavior}\n"
             "💰 Price: {price} per hour\n"
-            "Values are entered manually by the operator, may change, and are "
-            "not automatically verified.\n\n"
+            "MMR is automatically updated from the OpenDota estimate. Behavior "
+            "score is entered manually; actual values may change.\n\n"
             "⚠️ Select the number of hours when paying: for example, 1 unit is "
             "1 hour and 3 units are 3 hours.\n"
             "After purchase, an operator handles the order manually. Automatic "
@@ -578,13 +699,18 @@ if Config.BOT_LANGUAGE not in _MESSAGES:
     )
 
 
-def tr(key: str, **values) -> str:
-    """Return a localized interface message for the configured bot language."""
+def tr_in(language: str, key: str, **values) -> str:
+    """Return a localized message in the requested supported language."""
     try:
-        message = _MESSAGES[Config.BOT_LANGUAGE][key]
+        message = _MESSAGES[language][key]
     except KeyError as exc:
         raise KeyError(f"Missing translation: {key}") from exc
     return message.format(**values) if values else message
+
+
+def tr(key: str, **values) -> str:
+    """Return a localized interface message for the configured bot language."""
+    return tr_in(Config.BOT_LANGUAGE, key, **values)
 
 
 def severity_label(severity: str) -> str:

@@ -43,32 +43,41 @@ check `FUNPAY_GOLDEN_KEY` and sign in to FunPay again to obtain a fresh key.
 
 ## Добавление аккаунтов и объявлений / Accounts and listings
 
-1. Запустите `python add_account.py` и подтвердите, что вручную проверили
-   информацию и имеете право добавить аккаунт. Бот не пытается войти в Steam и
-   не проверяет пароль авторизацией. Пароль и shared secret вводятся скрыто и
-   шифруются Fernet перед сохранением в локальную SQLite-базу. MMR и
-   порядочность вводятся оператором вручную.
-2. Запустите `python prepare_listing.py`, чтобы получить предпросмотр заголовка
-   и описания по данным аккаунта и цене. Предпросмотр не публикуется.
-3. Создайте объявление вручную в FunPay. В текущей версии `aioFunPayAPI` есть
-   редактирование лота, но нет поддерживаемого метода создания нового лота.
-   Не указывайте в объявлении логин, пароль, Steam Guard secret или коды.
-4. Запустите `python register_lot.py` и укажите ID лота, точное уникальное
-   название, почасовую цену и локальный ID аккаунта из первого шага.
-5. Для каждого аккаунта повторите шаги. Оплаченный заказ с привязанного лота
-   зарезервирует только соответствующий свободный аккаунт. Заказ всё равно
-   требует ручного выполнения; бот не входит в Steam и не передаёт секреты.
+1. Создайте лот в FunPay один раз: установленная версия `aioFunPayAPI` умеет
+   редактировать существующие лоты, но не создавать новые.
+2. Запустите `python add_account.py`, подтвердите ручную проверку и добавьте
+   аккаунт. Для автоматического MMR укажите Dota account ID. Пароль и shared
+   secret вводятся скрыто и шифруются Fernet; автоматического входа в Steam нет.
+   Введите ID уже созданного лота — бот сам получит из FunPay его название и
+   цену и привяжет его к новому аккаунту.
+3. Для привязки лота к ранее добавленному аккаунту выполните
+   `python register_lot.py`: введите ID лота и выберите аккаунт из списка.
+   Вручную вводить название, цену или локальный ID при добавлении нового
+   аккаунта не нужно.
+4. После привязки бот синхронизирует заголовок и описание при запуске и после
+   изменения MMR в ежедневной проверке OpenDota. Цена и остальные поля лота
+   не меняются. Порядочность подставляется из базы, но автоматически не
+   проверяется: источник её изменения не подключён. После
+   ручной проверки нового значения запустите `python update_behavior.py` —
+   бот сохранит его и обновит текст привязанного лота.
+5. `python prepare_listing.py` оставлен как предпросмотр. Не указывайте в лоте
+   логин, пароль, Steam Guard secret или коды. Заказы резервируют только
+   связанный аккаунт; обработка заказа остаётся ручной.
 
-Run `python add_account.py` and confirm you manually checked the account details
-and are authorized to manage the account. The bot does not sign in to Steam or
-test credentials by authentication. Password and shared secret are hidden
-during entry and encrypted before storage. MMR and behavior score are entered
-manually. Run `python prepare_listing.py` for a title and description preview;
-it does not publish anything. Create the listing manually (the installed
-`aioFunPayAPI` supports editing existing lots, not creating new ones), then run
-`python register_lot.py` to bind its ID, exact unique title, hourly price, and
-local account ID. Never put credentials or Steam Guard codes in a listing. Paid
-orders reserve only the linked account, but fulfillment remains manual.
+Create the FunPay listing once (the installed `aioFunPayAPI` can edit existing
+listings but does not support creating them). Run `python add_account.py`, confirm
+manual verification, enter the Dota account ID for automatic MMR checks, and
+provide the existing listing ID. The bot fetches the title and price from FunPay
+and links the listing to the new account; credentials remain hidden and encrypted.
+For an account already in the database, run `python register_lot.py`, enter the
+listing ID, and choose the account from the list. After linking, the bot updates
+the listing title and description on startup and when the daily OpenDota check
+changes MMR. It does not change the price or other listing fields. Behavior score
+is included from the database but has no automatic data source; after manually
+verifying a new score, run `python update_behavior.py` to save it and refresh the
+linked listing.
+`python prepare_listing.py` remains a preview. Never put credentials or Steam
+Guard codes in a listing; order fulfillment remains manual.
 
 ## Telegram admin menu / Меню администратора
 

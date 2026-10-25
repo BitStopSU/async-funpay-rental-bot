@@ -21,7 +21,10 @@ async def main():
     db = Database()
     bot = RentalBot(Config.GOLDEN_KEY, db)
     workers = [
-        asyncio.create_task(daily_checks(db), name="daily-account-checks"),
+        asyncio.create_task(
+            daily_checks(db, bot.sync_account_listing),
+            name="daily-account-checks",
+        ),
         asyncio.create_task(password_worker(db), name="manual-password-tasks"),
         asyncio.create_task(digest_loop(db), name="notification-digest"),
         asyncio.create_task(

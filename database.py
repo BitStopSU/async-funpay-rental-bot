@@ -60,6 +60,7 @@ class Database:
         CREATE TABLE IF NOT EXISTS lots (
             lot_id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
+            title_en TEXT,
             price_per_hour REAL NOT NULL,
             is_extension INTEGER DEFAULT 0,
             account_id INTEGER REFERENCES accounts(account_id)
@@ -136,6 +137,8 @@ class Database:
         lot_columns = {
             row["name"] for row in self.conn.execute("PRAGMA table_info(lots)")
         }
+        if "title_en" not in lot_columns:
+            self.conn.execute("ALTER TABLE lots ADD COLUMN title_en TEXT")
         if "account_id" not in lot_columns:
             self.conn.execute(
                 "ALTER TABLE lots ADD COLUMN account_id INTEGER REFERENCES accounts(account_id)"
@@ -382,10 +385,14 @@ class Database:
         ).fetchone()
 
     def get_lot_by_title(self, title: str):
-        return self.conn.execute(
-            "SELECT * FROM lots WHERE title = ? COLLATE NOCASE",
-            (title.strip(),),
-        ).fetchone()
+        rows = self.conn.execute(
+            """SELECT * FROM lots
+               WHERE title = ? COLLATE NOCASE
+                  OR title_en = ? COLLATE NOCASE
+               LIMIT 2""",
+            (title.strip(), title.strip()),
+        ).fetchall()
+        return rows[0] if len(rows) == 1 else None
 
     def register_lot(
         self,
@@ -393,6 +400,7 @@ class Database:
         title: str,
         price_per_hour: float,
         account_id: int,
+        title_en: str | None = None,
     ):
         if not str(lot_id).strip() or not title.strip():
             raise ValueError("Lot ID and title are required")
@@ -413,12 +421,6 @@ class Database:
             ).fetchone()
             if existing:
                 raise ValueError("This FunPay lot is already registered")
-            duplicate_title = self.conn.execute(
-                "SELECT 1 FROM lots WHERE title = ? COLLATE NOCASE",
-                (title.strip(),),
-            ).fetchone()
-            if duplicate_title:
-                raise ValueError("Listing title must be unique for order matching")
             already_linked = self.conn.execute(
                 "SELECT lot_id FROM lots WHERE account_id = ?",
                 (account_id,),
@@ -426,14 +428,76 @@ class Database:
             if already_linked:
                 raise ValueError("This account already has a registered lot")
             self.conn.execute(
-                """INSERT INTO lots (lot_id, title, price_per_hour, is_extension, account_id)
-                   VALUES (?, ?, ?, 0, ?)""",
-                (str(lot_id).strip(), title.strip(), float(price_per_hour), account_id),
+                """INSERT INTO lots
+                   (lot_id, title, title_en, price_per_hour, is_extension, account_id)
+                   VALUES (?, ?, ?, ?, 0, ?)""",
+                (
+                    str(lot_id).strip(),
+                    title.strip(),
+                    title_en.strip() if title_en and title_en.strip() else None,
+                    float(price_per_hour),
+                    account_id,
+                ),
             )
             self.log(
                 "account_lot_registered",
                 account_id=account_id,
                 details={"lot_id": str(lot_id).strip()},
+            )
+
+    def get_unlinked_accounts(self):
+        return self.conn.execute(
+            """SELECT account_id, dota_account_id, mmr, behavior_score
+               FROM accounts
+               WHERE status = 'free' AND vac_banned = 0
+                 AND account_id NOT IN (
+                     SELECT account_id FROM lots WHERE account_id IS NOT NULL
+                 )
+               ORDER BY account_id"""
+        ).fetchall()
+
+    def set_dota_account_id(self, account_id: int, dota_account_id: str):
+        value = str(dota_account_id).strip()
+        if not value.isdecimal():
+            raise ValueError("Dota account ID must be numeric")
+        with self.conn:
+            cursor = self.conn.execute(
+                "UPDATE accounts SET dota_account_id = ? WHERE account_id = ?",
+                (value, account_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Account does not exist")
+            self.log(
+                "account_dota_id_updated",
+                account_id=account_id,
+            )
+
+    def get_lot_by_account_id(self, account_id: int):
+        return self.conn.execute(
+            "SELECT * FROM lots WHERE account_id = ? AND is_extension = 0",
+            (account_id,),
+        ).fetchone()
+
+    def get_lots_for_sync(self):
+        return self.conn.execute(
+            """SELECT lots.lot_id, lots.price_per_hour, lots.title, lots.title_en,
+                      accounts.account_id, accounts.mmr, accounts.behavior_score
+               FROM lots JOIN accounts ON accounts.account_id = lots.account_id
+               WHERE lots.is_extension = 0 AND accounts.vac_banned = 0
+               ORDER BY lots.lot_id"""
+        ).fetchall()
+
+    def update_lot_titles(
+        self, lot_id: str, title: str, title_en: str
+    ):
+        with self.conn:
+            self.conn.execute(
+                "UPDATE lots SET title = ?, title_en = ? WHERE lot_id = ?",
+                (title, title_en, str(lot_id)),
+            )
+            self.log(
+                "listing_titles_synchronized",
+                details={"lot_id": str(lot_id)},
             )
 
     def get_admin_status(self) -> dict[str, int]:
@@ -687,6 +751,13 @@ class Database:
 
     def update_mmr(self, account_id: int, mmr: int | None):
         with self.conn:
+            row = self.conn.execute(
+                "SELECT mmr FROM accounts WHERE account_id = ?",
+                (account_id,),
+            ).fetchone()
+            if not row:
+                raise ValueError("Account does not exist")
+            changed = row["mmr"] != mmr
             self.conn.execute(
                 "UPDATE accounts SET mmr = ?, last_check = ? WHERE account_id = ?",
                 (mmr, current_time().isoformat(), account_id),
@@ -694,6 +765,23 @@ class Database:
             self.log(
                 "account_mmr_checked", account_id=account_id,
                 details={"mmr": mmr},
+            )
+            return changed
+
+    def update_behavior_score(self, account_id: int, behavior_score: int):
+        if behavior_score < 0:
+            raise ValueError("Behavior score must be non-negative")
+        with self.conn:
+            cursor = self.conn.execute(
+                "UPDATE accounts SET behavior_score = ? WHERE account_id = ?",
+                (behavior_score, account_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Account does not exist")
+            self.log(
+                "account_behavior_score_updated",
+                account_id=account_id,
+                details={"behavior_score": behavior_score},
             )
 
     def queue_password_task(self, account_id: int, note: str = "") -> int:

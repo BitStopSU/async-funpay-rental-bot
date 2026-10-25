@@ -12,7 +12,11 @@ STEAM_BANS_URL = "https://api.steampowered.com/ISteamUser/GetPlayerBans/v1/"
 OPENDOTA_PLAYER_URL = "https://api.opendota.com/api/players/{}"
 
 
-async def run_daily_checks(db: Database, client: httpx.AsyncClient | None = None):
+async def run_daily_checks(
+    db: Database,
+    client: httpx.AsyncClient | None = None,
+    on_mmr_updated=None,
+):
     owns_client = client is None
     if client is None:
         client = httpx.AsyncClient(timeout=20)
@@ -22,7 +26,7 @@ async def run_daily_checks(db: Database, client: httpx.AsyncClient | None = None
                FROM accounts WHERE vac_banned = 0"""
         ).fetchall()
         await _check_vac_bans(db, client, accounts)
-        await _check_mmr(db, client, accounts)
+        await _check_mmr(db, client, accounts, on_mmr_updated)
     finally:
         if owns_client:
             await client.aclose()
@@ -65,7 +69,9 @@ async def _check_vac_bans(db: Database, client: httpx.AsyncClient, accounts):
             db.queue_notification(tr("notify_vac_failed"))
 
 
-async def _check_mmr(db: Database, client: httpx.AsyncClient, accounts):
+async def _check_mmr(
+    db: Database, client: httpx.AsyncClient, accounts, on_mmr_updated=None
+):
     for account in accounts:
         account_id = account["account_id"]
         dota_id = account["dota_account_id"]
@@ -77,7 +83,17 @@ async def _check_mmr(db: Database, client: httpx.AsyncClient, accounts):
             payload = response.json()
             estimate = payload.get("mmr_estimate") or {}
             mmr = estimate.get("estimate")
-            db.update_mmr(account_id, int(mmr) if mmr is not None else None)
+            if mmr is None:
+                db.log(
+                    "mmr_check_no_estimate",
+                    account_id=account_id,
+                    details={"provider": "OpenDota"},
+                    severity="warning",
+                )
+            else:
+                changed = db.update_mmr(account_id, int(mmr))
+                if changed and on_mmr_updated:
+                    await on_mmr_updated(account_id)
         except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
             logger.error(
                 tr("daily_mmr_failed"), account_id, type(exc).__name__,
@@ -92,10 +108,10 @@ async def _check_mmr(db: Database, client: httpx.AsyncClient, accounts):
         await asyncio.sleep(max(0, Config.OPENDOTA_REQUEST_DELAY))
 
 
-async def daily_checks(db: Database):
+async def daily_checks(db: Database, on_mmr_updated=None):
     while True:
         try:
-            await run_daily_checks(db)
+            await run_daily_checks(db, on_mmr_updated=on_mmr_updated)
         except Exception as exc:
             logger.error(tr("daily_checks_failed"), type(exc).__name__)
             db.log("daily_checks_failed", severity="error")
